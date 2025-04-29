@@ -1,0 +1,387 @@
+---
+title: "Logistic Regression"
+format: html
+---
+
+# Aim
+
+Fit logistic regression model to predict whether a patient will have a heart attack.
+
+```{r}
+library(car)        
+library(performance) 
+library(MASS)      
+library(pROC)      
+library(tidyverse) 
+library(caret) 
+library(broom)
+
+# for loading support functions during development
+for (file in list.files("R", pattern = "\\.R$", full.names = TRUE)) {
+  source(file)
+}
+```
+
+```{r}
+d <- read_csv("data/heart_attack_risk_clean.csv")
+```
+
+# Exploratory data checks
+
+
+## Check balance of target variable
+
+```{r}
+d |> 
+  count(result) |> 
+  mutate(prop = n / sum(n))
+```
+
+## Check distribution of predictor variables
+
+```{r}
+d |>  
+  select(age, gender, heart_rate, systolic_blood_pressure, 
+         diastolic_blood_pressure, blood_sugar, ck_mb, troponin) |> 
+  summary() 
+
+```
+
+```{r}
+d |> 
+  select(age, heart_rate, systolic_blood_pressure, diastolic_blood_pressure, 
+         blood_sugar, ck_mb, troponin) |> 
+  gather(key = "variable", value = "value") |> 
+  ggplot(aes(x = variable, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~ variable, scales = "free") +
+  theme_minimal() +
+  labs(title = "Boxplots for Numeric Predictors")
+
+d |> 
+  select(age, heart_rate, systolic_blood_pressure, diastolic_blood_pressure, 
+         blood_sugar, ck_mb, troponin) |> 
+  gather(key = "variable", value = "value") |> 
+  ggplot(aes(x = value)) +  
+  geom_histogram(fill = "steelblue", color = "white", bins = 30) +
+  facet_wrap(~ variable, scales = "free") +
+  theme_minimal() +
+  labs(title = "Histograms for Numeric Predictors")
+```
+
+- Exclude three observations for `heart_rate` with extreme anomalous results
+- Apply log transformation to `troponin` and `ck_mb` that are highly skewed
+
+```{r}
+d |> 
+  filter(heart_rate > 900) #|> 
+  # View()
+```
+
+
+```{r}
+d2 <- 
+  d |> 
+  filter(heart_rate < 900) |> 
+  mutate(across(c(ck_mb, troponin), log))
+```
+
+```{r}
+d2 |> 
+  select(age, heart_rate, systolic_blood_pressure, diastolic_blood_pressure, 
+         blood_sugar, ck_mb, troponin) |> 
+  gather(key = "variable", value = "value") |> 
+  ggplot(aes(x = value)) +  
+  geom_histogram(fill = "steelblue", color = "white", bins = 30) +
+  facet_wrap(~ variable, scales = "free") +
+  theme_minimal() +
+  labs(title = "Histograms for Numeric Predictors")
+```
+
+
+Create correlation matrix to check for multicollinearity
+
+```{r}
+d2 |> 
+  select(age,heart_rate, systolic_blood_pressure,
+         diastolic_blood_pressure, 
+         blood_sugar, ck_mb, troponin) |> 
+  cor() |> 
+  round(2)
+```
+
+ Check balance of gender
+
+```{r}
+d2 |> 
+  count(gender) |> 
+  mutate(prop = n / sum(n))
+```
+
+
+## Build logistic regression model
+
+```{r}
+d3 <- 
+  d2 |> 
+  # set categorical variables as factors
+  mutate(
+    across(result, ~factor(., levels = c("negative", "positive"))),
+    across(gender, ~factor(., levels = c("Female", "Male")))
+  )
+```
+
+
+```{r}
+logistic_model <- 
+  glm(
+    result ~ age + gender + heart_rate + systolic_blood_pressure + 
+      diastolic_blood_pressure + blood_sugar + ck_mb + troponin,
+    family = binomial(link = "logit"),
+    data = d3
+  )
+
+reduced_model <- 
+  glm(
+    result ~ age + gender + ck_mb + troponin,
+    family = binomial(link = "logit"),
+    data = d3
+  )
+```
+
+
+```{r}
+anova(logistic_model, reduced_model, test = "Chisq")
+```
+
+
+## Model diagnostics
+
+Calculate VIF to check for multicollinearity
+
+```{r}
+car::vif(logistic_model)
+# => Looks good
+```
+
+Check for influential points
+
+```{r}
+influencePlot(logistic_model)
+
+cooksd <- cooks.distance(logistic_model)
+plot(cooksd, pch = 20, main = "Cook's Distance")
+abline(h = 4/nrow(d3), col = "red")  # Rule of thumb threshold
+```
+
+One highly influential point
+
+```{r}
+# d3 |> 
+#   slice(c(30, 209)) |> 
+#   View()
+```
+
+
+```{r}
+# H0: The logistic regression model is appropriate.
+# H1: The logistic regression model is not appropriate.
+pchisq(logistic_model$deviance, logistic_model$df.residual, lower.tail = FALSE)
+# => model is appropriate
+```
+
+## Model Summary
+
+```{r}
+summary(logistic_model)
+summary(reduced_model)
+```
+
+```{r}
+confint(logistic_model)
+confint(reduced_model)
+```
+
+```{r}
+tidy(logistic_model, conf.int = TRUE, exponentiate = TRUE) |> 
+  mutate(across(where(is.numeric), ~round(., 2)))
+
+tidy(reduced_model) |> 
+  mutate(across(where(is.numeric), ~round(., 3)))
+
+glance(logistic_model)
+# augment(logistic_model) |> View()
+```
+
+
+## Check model performance
+
+Confusion matrix 
+
+```{r}
+predicted_probs <-
+  predict(logistic_model, type = "response")
+
+predicted_classes <- 
+  ifelse(predicted_probs > 0.5, "positive", "negative")
+predicted_classes <- 
+  factor(predicted_classes, levels = c("negative", "positive"))
+
+# Create confusion matrix and get multiple metrics at once
+cm <- confusionMatrix(predicted_classes, d3$result)
+```
+
+```{r}
+accuracy <- cm$overall["Accuracy"]
+kappa <- cm$overall["Kappa"]
+
+cat("Accuracy:", round(accuracy, 4), "\n")
+cat("Cohen's Kappa:", round(kappa, 4), "\n")
+```
+
+checking the McFadden's pseudo R^2 based on the deviance
+```{r}
+1 - logistic_model$deviance/logistic_model$null.deviance
+```
+
+## Model predictions
+
+troponin
+
+```{r}
+pred_data <- 
+  tibble(
+    age = mean(d3$age),              
+    gender = "Female",                     
+    heart_rate = mean(d3$heart_rate),
+    systolic_blood_pressure = mean(d3$systolic_blood_pressure),  
+    diastolic_blood_pressure = mean(d3$diastolic_blood_pressure),
+    blood_sugar = mean(d3$blood_sugar),          
+    ck_mb = quantile(d3$ck_mb, probs = 0.1),                       
+    troponin = seq(min(d3$troponin), max(d3$troponin), length.out = 100) 
+  )
+
+pred_data$predicted_prob <- 
+  predict(
+    logistic_model, 
+    newdata = pred_data, 
+    type = "response"
+  )
+
+x_breaks_original <- c(0.001, 0.01, 0.1, 1, 10)
+
+pred_data |>
+  # mutate(troponin = exp(troponin)) |>
+  ggplot(aes(x = troponin, y = predicted_prob)) +
+  geom_line(color = "blue", linewidth = 1) +
+  geom_jitter(
+    data = d3,
+    aes(x = troponin, y = ifelse(result == "positive", 1, 0)),
+    height = 0.02, alpha = 0.2, color = "orange"
+  ) +
+  scale_x_continuous(
+    "Troponin Level",
+    breaks = log(x_breaks_original),
+    labels = x_breaks_original
+  ) +
+  geom_vline(
+    xintercept = exp(quantile(d3$troponin, probs = 0.1)), 
+    linetype = "dashed", 
+    color = "red"
+  ) +
+  labs(
+    title = "Logistic Regression: Probability of Positive Result vs. Troponin",
+    # x = "Troponin Level",
+    y = "Probability of Positive Result",
+    caption = "All other variables held at their mean values"
+  ) +
+  theme_minimal() 
+```
+
+CK MB
+
+```{r}
+pred_ck_mb <- 
+  tibble(
+    age = mean(d3$age),              
+    gender = "Female",                     
+    heart_rate = mean(d3$heart_rate),
+    systolic_blood_pressure = mean(d3$systolic_blood_pressure),  
+    diastolic_blood_pressure = mean(d3$diastolic_blood_pressure),
+    blood_sugar = mean(d3$blood_sugar),          
+    troponin = quantile(d3$troponin, probs = 0.10),
+    ck_mb = seq(min(d3$ck_mb), max(d3$ck_mb), length.out = 100), 
+    
+  )
+
+pred_ck_mb$predicted_prob <- 
+  predict(logistic_model, 
+          newdata = pred_ck_mb, 
+          type = "response")
+
+x_lab_original_scale <- c(0.3, 3, 30, 300)
+
+pred_ck_mb |> 
+  ggplot(aes(x = ck_mb, y = predicted_prob)) +
+  geom_line(color = "blue", linewidth = 1) +
+  geom_jitter(
+    data = d3, 
+    aes(x = ck_mb, y = ifelse(result == "positive", 1, 0)), 
+    height = 0.02, alpha = 0.2, color = "orange"
+  ) +
+  labs(
+    title = "Logistic Regression: Probability of Positive Result vs. CK-MB",
+    x = "CK-MB Level",
+    y = "Probability of Positive Result",
+    caption = "All other variables held at their mean values"
+  ) +
+  theme_minimal()
+```
+
+
+Age
+
+```{r}
+pred_age <- 
+  tibble(
+    age = seq(min(d3$age), max(d3$age), length.out = 100),              
+    gender = "Male",                     
+    heart_rate = mean(d3$heart_rate),
+    systolic_blood_pressure = mean(d3$systolic_blood_pressure),  
+    diastolic_blood_pressure = mean(d3$diastolic_blood_pressure),
+    blood_sugar = mean(d3$blood_sugar),          
+    troponin = quantile(d3$troponin, probs = 0.5),
+    ck_mb = quantile(d3$ck_mb, probs = 0.25), 
+    
+  )
+
+pred_age$predicted_prob <- 
+  predict(logistic_model, 
+          newdata = pred_age, 
+          type = "response")
+
+pred_age |> 
+  ggplot(aes(x = age, y = predicted_prob)) +
+  geom_line(color = "blue", linewidth = 1) +
+  geom_jitter(
+    data = d3, 
+    aes(x = age, y = ifelse(result == "positive", 1, 0)), 
+    height = 0.02, alpha = 0.2, color = "orange"
+  ) +
+  labs(
+    title = "Logistic Regression: Probability of Positive Result vs. Age",
+    x = "Age",
+    y = "Probability of Positive Result",
+    caption = "All other variables held at their mean values"
+  ) +
+  theme_minimal()
+```
+
+
+# Save
+
+```{r}
+saveRDS(logistic_model, file = "model/logistic_model.rds")
+saveRDS(d3, file = "model/model_data.rds")
+```
+

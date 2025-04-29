@@ -6,9 +6,8 @@ d <-
 
 d2 <- 
   d |> 
-  mutate(across(
-    gender, 
-    ~ifelse(.==1, "Male", "Female") |> factor(levels = c("Female", "Male"))
-  ))
+  mutate(
+    across(gender, ~factor(., labels = c("Female", "Male")))
+  )
 
 write_csv(d2, "data/heart_attack_risk_clean.csv")
