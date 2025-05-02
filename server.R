@@ -47,10 +47,10 @@ server <- function(input, output, session) {
     pred_data <- predict_result(
       age = input$age,
       gender = input$gender,
-      heart_rate = mean(model_data$heart_rate),
-      systolic_blood_pressure = mean(model_data$systolic_blood_pressure),
-      diastolic_blood_pressure = mean(model_data$diastolic_blood_pressure),
-      blood_sugar = mean(model_data$blood_sugar),
+      heart_rate = input$heart_rate,
+      systolic_blood_pressure = input$blood_pressure[2],
+      diastolic_blood_pressure = input$blood_pressure[1],
+      blood_sugar = input$blood_sugar,
       # troponin input is on original scale but model uses log transformed values
       troponin = log(input$troponin),
       ck_mb = seq(
@@ -68,4 +68,8 @@ server <- function(input, output, session) {
       x_int = input$ck_mb
     )
   })
+  
+  # observeEvent(input$about_btn, {
+  #   modalDialog()
+  # })
 }
