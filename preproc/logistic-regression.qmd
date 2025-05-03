@@ -15,11 +15,14 @@ library(pROC)
 library(tidyverse) 
 library(caret) 
 library(broom)
+library(flextable)
 
 # for loading support functions during development
 for (file in list.files("R", pattern = "\\.R$", full.names = TRUE)) {
   source(file)
 }
+
+# (pal <- PNWColors::pnw_palette("Bay", 8, type="continuous"))
 ```
 
 ```{r}
@@ -31,11 +34,14 @@ d <- read_csv("data/heart_attack_risk_clean.csv")
 
 ## Check balance of target variable
 
+
 ```{r}
 d |> 
   count(result) |> 
   mutate(prop = n / sum(n))
 ```
+
+More positive than negative heart attack results but overall not too unbalanced.
 
 ## Check distribution of predictor variables
 
@@ -48,6 +54,17 @@ d |>
 ```
 
 ```{r}
+# Create a named vector for your custom labels
+custom_labels <- c(
+  age = "Age",
+  heart_rate = "Heart Rate (bpm)",
+  systolic_blood_pressure = "Systolic BP (mmHg)",
+  diastolic_blood_pressure = "Diastolic BP (mmHg)",
+  blood_sugar = "Blood Sugar (mg/dL)",
+  ck_mb = "CK-MB (ng/mL)",
+  troponin = "Troponin (ng/mL)"
+)
+
 d |> 
   select(age, heart_rate, systolic_blood_pressure, diastolic_blood_pressure, 
          blood_sugar, ck_mb, troponin) |> 
@@ -58,28 +75,45 @@ d |>
   theme_minimal() +
   labs(title = "Boxplots for Numeric Predictors")
 
-d |> 
-  select(age, heart_rate, systolic_blood_pressure, diastolic_blood_pressure, 
-         blood_sugar, ck_mb, troponin) |> 
-  gather(key = "variable", value = "value") |> 
-  ggplot(aes(x = value)) +  
-  geom_histogram(fill = "steelblue", color = "white", bins = 30) +
-  facet_wrap(~ variable, scales = "free") +
-  theme_minimal() +
-  labs(title = "Histograms for Numeric Predictors")
+(p_hist <- 
+    d |> 
+    select(age, heart_rate, systolic_blood_pressure, diastolic_blood_pressure, 
+           blood_sugar, ck_mb, troponin) |> 
+    gather(key = "variable", value = "value") |> 
+    ggplot(aes(x = value)) +  
+    geom_histogram(fill = "#2E9093", color = "white", bins = 30) +
+    facet_wrap(
+      ~ variable, 
+      scales = "free",
+      labeller = labeller(variable = as_labeller(custom_labels))
+    ) +
+    theme_minimal() +
+    labs(
+      title = "Histograms for Numeric Predictors",
+      x = "Value",
+      y = "Count"
+    ) +
+    theme(
+      text = element_text(size = 14)
+    )
+)
+# ggsave(
+#   "figures/histograms_raw.png",
+#   p_hist,
+#   width = 9,
+#   height = 5,
+#   dpi = 500,
+#   bg = "white"
+# )
 ```
 
 - Exclude three observations for `heart_rate` with extreme anomalous results
 - Apply log transformation to `troponin` and `ck_mb` that are highly skewed
 
-```{r}
-d |> 
-  filter(heart_rate > 900) #|> 
-  # View()
-```
-
 
 ```{r}
+# d |> filter(heart_rate > 900) |> View()
+
 d2 <- 
   d |> 
   filter(heart_rate < 900) |> 
@@ -87,15 +121,46 @@ d2 <-
 ```
 
 ```{r}
-d2 |> 
-  select(age, heart_rate, systolic_blood_pressure, diastolic_blood_pressure, 
-         blood_sugar, ck_mb, troponin) |> 
-  gather(key = "variable", value = "value") |> 
-  ggplot(aes(x = value)) +  
-  geom_histogram(fill = "steelblue", color = "white", bins = 30) +
-  facet_wrap(~ variable, scales = "free") +
-  theme_minimal() +
-  labs(title = "Histograms for Numeric Predictors")
+custom_labels2 <- c(
+  age = "Age",
+  heart_rate = "Heart Rate (bpm)",
+  systolic_blood_pressure = "Systolic BP (mmHg)",
+  diastolic_blood_pressure = "Diastolic BP (mmHg)",
+  blood_sugar = "Blood Sugar (mg/dL)",
+  ck_mb = "Log CK-MB (ng/mL)",
+  troponin = "Log Troponin (ng/mL)"
+)
+
+(p_hist2 <- 
+    d2 |> 
+    select(age, heart_rate, systolic_blood_pressure, diastolic_blood_pressure, 
+           blood_sugar, ck_mb, troponin) |> 
+    gather(key = "variable", value = "value") |> 
+    ggplot(aes(x = value)) +  
+    geom_histogram(fill = "#2E9093", color = "white", bins = 30) +
+    labs(
+      title = "Histograms for Numeric Predictors",
+      x = "Value",
+      y = "Count"
+    ) +
+    facet_wrap(
+      ~ variable, 
+      scales = "free",
+      labeller = labeller(variable = as_labeller(custom_labels2))
+    ) +
+    theme_minimal() +
+    theme(
+      text = element_text(size = 14)
+    )
+)
+# ggsave(
+#   "figures/histograms.png",
+#   p_hist2,
+#   width = 9,
+#   height = 5,
+#   dpi = 500,
+#   bg = "white"
+# )
 ```
 
 
@@ -110,13 +175,84 @@ d2 |>
   round(2)
 ```
 
- Check balance of gender
+Check balance of result again
 
 ```{r}
-d2 |> 
-  count(gender) |> 
-  mutate(prop = n / sum(n))
+(p_result <- 
+  d2 |> 
+  count(result) |> 
+  mutate(
+    prop = format(n / sum(n) * 100, digits = 1, nsmall = 1),
+    lab = paste0(prop, "%"),
+    result = str_to_title(result)
+  ) |> 
+  ggplot(aes(x = result, y = n, fill = result)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = lab), vjust = -0.5, size = 4) +
+  scale_fill_manual(
+    values = c("Negative" = "#ED950A", "Positive" = "#ADBF5F")
+  ) +
+  guides(fill = "none") +
+  labs(
+    title = "Proportion of Heart Attack Diagnosis",
+    x =NULL,
+    y = "Count",
+    fill = "Result"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 14)
+  )
+)
+
+# ggsave(
+#   "figures/count_result.png",
+#   p_result,
+#   width = 5,
+#   height = 5,
+#   dpi = 500,
+#   bg = "white"
+# )
 ```
+
+
+ Check balance of gender
+ 
+```{r}
+(p_gender <- 
+  d2 |> 
+  count(gender) |> 
+  mutate(prop = format(n / sum(n) * 100, digits = 1, nsmall = 1),
+         lab = paste0(prop, "%")) |> 
+  ggplot(aes(x = gender, y = n, fill = gender)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = lab), vjust = -0.5, size = 4) +
+  scale_fill_manual(
+    values = c("Female" = "#ED950A", "Male" = "#ADBF5F")
+  ) +
+  guides(fill = "none") +
+  labs(
+    title = "Proportion of Gender",
+    x = NULL,
+    y = "Count",
+    fill = "Result"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 14)
+  )
+)
+
+# ggsave(
+#   "figures/count_gender.png",
+#   p_gender,
+#   width = 5,
+#   height = 5,
+#   dpi = 500,
+#   bg = "white"
+# )
+```
+ 
 
 
 ## Build logistic regression model
@@ -143,7 +279,7 @@ logistic_model <-
 
 reduced_model <- 
   glm(
-    result ~ age + gender + ck_mb + troponin,
+    result ~ ck_mb + troponin,
     family = binomial(link = "logit"),
     data = d3
   )
@@ -154,6 +290,27 @@ reduced_model <-
 anova(logistic_model, reduced_model, test = "Chisq")
 ```
 
+The reduced model, including only CK-MB and troponin has the same predictive power as the full logistic model.
+May use either model? Or keep reduced model because it is simpler?
+
+```{r}
+fit_summary <- 
+  bind_rows(
+    glance(logistic_model),
+    glance(reduced_model)
+  ) |> 
+  mutate(
+    Model = c("Full Model", "Reduced Model"), 
+    .before = 1
+  ) |> 
+  mutate(across(where(is.numeric), round)) |> 
+  select(Model, AIC, BIC)
+
+fit_summary |> 
+  flextable() |> 
+  autofit()
+```
+
 
 ## Model diagnostics
 
@@ -161,6 +318,7 @@ Calculate VIF to check for multicollinearity
 
 ```{r}
 car::vif(logistic_model)
+car::vif(reduced_model)
 # => Looks good
 ```
 
@@ -168,17 +326,21 @@ Check for influential points
 
 ```{r}
 influencePlot(logistic_model)
+influencePlot(reduced_model)
 
 cooksd <- cooks.distance(logistic_model)
 plot(cooksd, pch = 20, main = "Cook's Distance")
 abline(h = 4/nrow(d3), col = "red")  # Rule of thumb threshold
+
+tibble(cooksd = round(cooksd, 4)) |> 
+  arrange(desc(cooksd))
 ```
 
-One highly influential point
+There are some influential points but all Cook's D <1.0
 
 ```{r}
-# d3 |> 
-#   slice(c(30, 209)) |> 
+# d3 |>
+#   slice(c(30, 127, 209, 585, 780, 1265)) |>
 #   View()
 ```
 
@@ -203,16 +365,67 @@ confint(reduced_model)
 ```
 
 ```{r}
-tidy(logistic_model, conf.int = TRUE, exponentiate = TRUE) |> 
-  mutate(across(where(is.numeric), ~round(., 2)))
+mod_summary <- 
+  tidy(
+  logistic_model, 
+  conf.int = TRUE, 
+  # exponentiate = TRUE
+) |> 
+  mutate(across(where(is.numeric), ~round(., 3)))
 
 tidy(reduced_model) |> 
   mutate(across(where(is.numeric), ~round(., 3)))
-
-glance(logistic_model)
 # augment(logistic_model) |> View()
 ```
 
+
+```{r}
+# format table for presentation
+mod_summary2 <- 
+  mod_summary |>
+  mutate(
+    across(
+      term,
+      ~case_when(
+        . == "(Intercept)" ~ "Intercept",
+        . == "age" ~ "Age",
+        . == "genderMale" ~ "Gender (Male)",
+        . == "heart_rate" ~ "Heart Rate",
+        . == "systolic_blood_pressure" ~ "Systolic BP",
+        . == "diastolic_blood_pressure" ~ "Diastolic BP",
+        . == "blood_sugar" ~ "Blood Sugar",
+        . == "ck_mb" ~ "Log CK-MB",
+        . == "troponin" ~ "Log Troponin"
+      )
+    ),
+    across(
+      p.value,
+      ~ifelse(
+        . < 0.001, "<0.001", 
+        formatC(., format = "f", digits = 3)
+      )
+    ),
+    across(where(is.numeric), ~round(., 2))
+  ) |> 
+  relocate(p.value, .after = conf.high)
+
+(ft_mod_summary <- 
+  flextable(mod_summary2) |> 
+  autofit() |> 
+  set_header_labels(
+    term = "Variable",
+    estimate = "Estimate",
+    std.error = "Std. Error",
+    statistic = "z value",
+    conf.low = "Lower CI",
+    conf.high = "Upper CI",
+    p.value = "p-value"
+  ) |> 
+    bg(bg = "white", part = "all")
+)
+
+# save_as_image(ft_mod_summary, path = "figures/model_summary.png")
+```
 
 ## Check model performance
 
@@ -228,7 +441,7 @@ predicted_classes <-
   factor(predicted_classes, levels = c("negative", "positive"))
 
 # Create confusion matrix and get multiple metrics at once
-cm <- confusionMatrix(predicted_classes, d3$result)
+cm <- caret::confusionMatrix(predicted_classes, d3$result)
 ```
 
 ```{r}
@@ -242,6 +455,121 @@ cat("Cohen's Kappa:", round(kappa, 4), "\n")
 checking the McFadden's pseudo R^2 based on the deviance
 ```{r}
 1 - logistic_model$deviance/logistic_model$null.deviance
+```
+
+
+```{r}
+# Plot confusion matrix
+cm_df <- 
+  cm$table |> 
+  as_tibble() |> 
+  mutate(across(where(is.character), str_to_sentence)) |> 
+  rename_with(~c("Prediction", "Reference", "Freq"))
+
+pal <- PNWColors::pnw_palette("Shuksan2", 100)
+
+(p_cm <- 
+    cm_df |> 
+    ggplot(aes(x = Reference, y = Prediction, fill = Freq)) +
+    geom_tile() +
+    geom_text(aes(label = Freq), color = "white", size = 5) +
+    scale_fill_gradientn(colors = pal) +
+    labs(title = "Confusion Matrix", x = "Actual", y = "Predicted") +
+    theme_minimal() +
+    theme(
+      text = element_text(size = 14),
+      panel.grid = element_blank()
+    )
+)
+
+# ggsave(
+#   "figures/confusion_matrix.png",
+#   p_cm,
+#   width = 7,
+#   height = 5,
+#   dpi = 500,
+#   bg = "white"
+# )
+```
+
+
+ROC Curve
+
+```{r}
+library(yardstick)
+
+predictions <- 
+  tibble(
+  truth = d3$result,
+  prob = predict(logistic_model, type = "response")  # Predicted probabilities
+)
+# xx <- augment(logistic_model, type.predict = "response") 
+# xx |> select(result, .fitted)
+
+roc_data <- 
+  predictions %>%
+  roc_curve(truth, prob, event_level = "second") 
+
+auc_value <- 
+  predictions %>%
+  roc_auc(truth, prob, event_level = "second") %>%
+  pull(.estimate)
+
+p_roc <-
+  roc_data |> 
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_path(color = "#2E9093", size = 1.2) +
+  geom_abline(lty = 2, alpha = 0.5) +  # Add the reference line
+  coord_equal() +  # Force the plot to be square
+  labs(
+    title = "ROC Curve", 
+    subtitle = paste("AUC =", round(auc_value, 3)),
+    x = "False Positive Rate (1 - Specificity)",
+    y = "True Positive Rate (Sensitivity)"
+  ) +
+  theme_minimal() +
+  theme(
+    # text = element_text(size = 14),
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 12),
+    axis.title = element_text(size = 12)
+  )
+
+p_roc
+
+ggsave(
+  "figures/roc_auc.png",
+  p_roc,
+  width = 7,
+  height = 5,
+  dpi = 500,
+  bg = "white"
+)
+```
+
+```{r}
+# Install pROC if you don't have it already
+# install.packages("pROC")
+
+# Load the pROC package
+library(pROC)
+
+# Get the predicted probabilities from your model
+pred_probs <- predict(logistic_model, type = "response")
+
+# Get the actual outcomes from your data
+actual_outcomes <- d3$result
+
+# Create the ROC curve object
+roc_curve <- roc(actual_outcomes, pred_probs)
+
+# Plot the ROC curve
+plot(roc_curve, main = "ROC Curve", col = "blue", lwd = 2)
+abline(a = 0, b = 1, lty = 2, col = "gray") # Add reference line
+
+# Add AUC to the plot
+auc_value <- auc(roc_curve)
+text(0.6, 0.2, paste("AUC =", round(auc_value, 3)), col = "black")
 ```
 
 ## Model predictions
