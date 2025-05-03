@@ -19,11 +19,11 @@ plot_pred_data <- function(pred_data,
   
   pred_data |> 
     ggplot(aes(x = !!x_var, y = predicted_prob)) +
-    geom_line(color = "blue", linewidth = 1) +
+    geom_line(color = "#0f85a0", linewidth = 1) +
     geom_jitter(
       data = mod_data, 
       aes(x = !!x_var, y = ifelse(result == "positive", 1, 0)), 
-      height = 0.02, alpha = 0.3, color = "orange"
+      height = 0.02, alpha = 0.3, color = "#edd746"
     ) +
     scale_x_continuous(
       x_lab,
@@ -33,7 +33,7 @@ plot_pred_data <- function(pred_data,
     geom_vline(
       xintercept = log(x_int), 
       linetype = "dashed", 
-      color = "red",
+      color = "#dd4124",
       linewidth = 1
     ) +
     ylab("Probability of Positive Result") +
