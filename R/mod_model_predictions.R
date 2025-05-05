@@ -12,19 +12,21 @@ modelPredictionInput <- function(id) {
           "Logistic regression model indicated that Toponin and Creatine kinase-MB levels are the strongest predictors of heart attacks."
         )
       ),
-      sliderInput(
+      numericInput(
+        ns("troponin"),
+        "Troponin (ng/mL)",
+        value = 0.01,
+        min = 0.001,
+        max = 10,
+        step = 0.001
+      ),
+      numericInput(
         ns("ck_mb"),
         "Creatine kinase-MB (ng/mL)",
         min = 0.3,
         max = 300,
-        value = 1
-      ),
-      sliderInput(
-        ns("troponin"), 
-        "Troponin (ng/mL)", 
-        min = 0.001, 
-        max = 0.3, 
-        value = 0.01
+        value = 1,
+        step = 0.1
       ),
       materialSwitch(
         inputId = ns("show_data"),
