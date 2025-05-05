@@ -2,6 +2,7 @@ library(shiny)
 library(bslib)
 library(bsicons)
 library(dplyr)
+library(tidyr)
 library(ggplot2)
 
 # for loading support functions during development
@@ -10,4 +11,8 @@ for (file in list.files("R", pattern = "\\.R$", full.names = TRUE)) {
 }
 
 logistic_model <- readRDS("model/logistic_model.rds")
+reduced_model <- readRDS("model/reduced_model.rds")
 model_data <- readRDS("model/model_data.rds")
+log_troponin_seq <- readRDS("model/log_troponin_seq.rds")
+log_ckmb_seq <- readRDS("model/log_ckmb_seq.rds")
+prediction_grid <- readRDS("model/prediction_grid.rds")

@@ -14,32 +14,32 @@
 #'
 #' @returns A tibble with predicted results based on data and logistic model
 predict_result <- function(
-    age,
-    gender,
-    heart_rate,
-    systolic_blood_pressure,
-    diastolic_blood_pressure,
-    blood_sugar,
+    # age,
+    # gender,
+    # heart_rate,
+    # systolic_blood_pressure,
+    # diastolic_blood_pressure,
+    # blood_sugar,
     ck_mb,
     troponin,
-    logistic_model
+    model
 ) {
   
   pred_data <- 
     tibble(
-      age = age,
-      gender = gender,
-      heart_rate = heart_rate,
-      systolic_blood_pressure = systolic_blood_pressure,
-      diastolic_blood_pressure = diastolic_blood_pressure,
-      blood_sugar = blood_sugar,
-      ck_mb = ck_mb,
-      troponin = troponin
+      # age = age,
+      # gender = gender,
+      # heart_rate = heart_rate,
+      # systolic_blood_pressure = systolic_blood_pressure,
+      # diastolic_blood_pressure = diastolic_blood_pressure,
+      # blood_sugar = blood_sugar,
+      log_ck_mb = ck_mb,
+      log_troponin = troponin
     )
   
   pred_data$predicted_prob <- 
     predict(
-      logistic_model, 
+      model,
       newdata = pred_data, 
       type = "response"
     )

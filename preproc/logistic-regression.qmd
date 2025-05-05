@@ -43,6 +43,16 @@ d |>
 
 More positive than negative heart attack results but overall not too unbalanced.
 
+```{r}
+d |> 
+  group_by(result) |>
+  summarise(
+    mean_trop = mean(troponin),
+    mean_ck_mb = mean(ck_mb)
+  )
+```
+
+
 ## Check distribution of predictor variables
 
 ```{r}
@@ -117,7 +127,16 @@ d |>
 d2 <- 
   d |> 
   filter(heart_rate < 900) |> 
-  mutate(across(c(ck_mb, troponin), log))
+  mutate(
+    log_ck_mb = log(ck_mb),
+    log_troponin = log(troponin),
+    # age_group = cut(
+    #   age, 
+    #   breaks = c(0, 40, 50, 60, 70, 80, 110),
+    #   labels = c("<40", "40-50", "50-60", "60-70", "70-80", ">80"),
+    #   right = FALSE
+    # )
+  )
 ```
 
 ```{r}
@@ -127,14 +146,14 @@ custom_labels2 <- c(
   systolic_blood_pressure = "Systolic BP (mmHg)",
   diastolic_blood_pressure = "Diastolic BP (mmHg)",
   blood_sugar = "Blood Sugar (mg/dL)",
-  ck_mb = "Log CK-MB (ng/mL)",
-  troponin = "Log Troponin (ng/mL)"
+  log_ck_mb = "Log CK-MB (ng/mL)",
+  log_troponin = "Log Troponin (ng/mL)"
 )
 
 (p_hist2 <- 
     d2 |> 
     select(age, heart_rate, systolic_blood_pressure, diastolic_blood_pressure, 
-           blood_sugar, ck_mb, troponin) |> 
+           blood_sugar, log_ck_mb, log_troponin) |> 
     gather(key = "variable", value = "value") |> 
     ggplot(aes(x = value)) +  
     geom_histogram(fill = "#2E9093", color = "white", bins = 30) +
@@ -170,7 +189,7 @@ Create correlation matrix to check for multicollinearity
 d2 |> 
   select(age,heart_rate, systolic_blood_pressure,
          diastolic_blood_pressure, 
-         blood_sugar, ck_mb, troponin) |> 
+         blood_sugar, log_ck_mb, log_troponin) |> 
   cor() |> 
   round(2)
 ```
@@ -272,14 +291,21 @@ d3 <-
 logistic_model <- 
   glm(
     result ~ age + gender + heart_rate + systolic_blood_pressure + 
-      diastolic_blood_pressure + blood_sugar + ck_mb + troponin,
+      diastolic_blood_pressure + blood_sugar + log_ck_mb + log_troponin,
     family = binomial(link = "logit"),
     data = d3
   )
 
 reduced_model <- 
   glm(
-    result ~ ck_mb + troponin,
+    result ~ log_ck_mb + log_troponin,
+    family = binomial(link = "logit"),
+    data = d3
+  )
+
+lr_age <- 
+  glm(
+    result ~ age + log_ck_mb + log_troponin,
     family = binomial(link = "logit"),
     data = d3
   )
@@ -287,7 +313,9 @@ reduced_model <-
 
 
 ```{r}
+anova(logistic_model, lr_age, test = "Chisq")
 anova(logistic_model, reduced_model, test = "Chisq")
+anova(reduced_model, lr_age, test = "Chisq")
 ```
 
 The reduced model, including only CK-MB and troponin has the same predictive power as the full logistic model.
@@ -297,10 +325,11 @@ May use either model? Or keep reduced model because it is simpler?
 fit_summary <- 
   bind_rows(
     glance(logistic_model),
-    glance(reduced_model)
+    glance(reduced_model),
+    glance(lr_age)
   ) |> 
   mutate(
-    Model = c("Full Model", "Reduced Model"), 
+    Model = c("Full Model", "Reduced Model", "Age Model"), 
     .before = 1
   ) |> 
   mutate(across(where(is.numeric), round)) |> 
@@ -357,12 +386,15 @@ pchisq(logistic_model$deviance, logistic_model$df.residual, lower.tail = FALSE)
 ```{r}
 summary(logistic_model)
 summary(reduced_model)
+summary(lr_age)
 ```
 
 ```{r}
 confint(logistic_model)
 confint(reduced_model)
 ```
+
+Age has an apparent, perhaps un-intuative, negative relationship with heart attack risk. However, biomarkers like troponin and CK-MB are the true drivers of heart attack risk. Older people tend to have higher levels of these biomarkers, which creates an apparent relationship between age and heart attacks. When we control for the biomarker levels directly, we find that for people with the same biomarker levels, younger people might actually have a slightly higher risk (hence the negative coefficient). Having said that, the reduced model has a smaller AIC and BIC, and has the same predictive power as the full model, suggesting that age is overall not a significant predictor of heart attacks.
 
 ```{r}
 mod_summary <- 
@@ -372,6 +404,7 @@ mod_summary <-
   # exponentiate = TRUE
 ) |> 
   mutate(across(where(is.numeric), ~round(., 3)))
+mod_summary
 
 tidy(reduced_model) |> 
   mutate(across(where(is.numeric), ~round(., 3)))
@@ -394,8 +427,8 @@ mod_summary2 <-
         . == "systolic_blood_pressure" ~ "Systolic BP",
         . == "diastolic_blood_pressure" ~ "Diastolic BP",
         . == "blood_sugar" ~ "Blood Sugar",
-        . == "ck_mb" ~ "Log CK-MB",
-        . == "troponin" ~ "Log Troponin"
+        . == "log_ck_mb" ~ "Log CK-MB",
+        . == "log_troponin" ~ "Log Troponin"
       )
     ),
     across(
@@ -455,6 +488,7 @@ cat("Cohen's Kappa:", round(kappa, 4), "\n")
 checking the McFadden's pseudo R^2 based on the deviance
 ```{r}
 1 - logistic_model$deviance/logistic_model$null.deviance
+1 - reduced_model$deviance/reduced_model$null.deviance
 ```
 
 
@@ -518,7 +552,7 @@ auc_value <-
 p_roc <-
   roc_data |> 
   ggplot(aes(x = 1 - specificity, y = sensitivity)) +
-  geom_path(color = "#2E9093", size = 1.2) +
+  geom_path(color = "#2E9093", linewidth = 1.2) +
   geom_abline(lty = 2, alpha = 0.5) +  # Add the reference line
   coord_equal() +  # Force the plot to be square
   labs(
@@ -537,42 +571,39 @@ p_roc <-
 
 p_roc
 
-ggsave(
-  "figures/roc_auc.png",
-  p_roc,
-  width = 7,
-  height = 5,
-  dpi = 500,
-  bg = "white"
+# ggsave(
+#   "figures/roc_auc.png",
+#   p_roc,
+#   width = 7,
+#   height = 5,
+#   dpi = 500,
+#   bg = "white"
+# )
+```
+
+
+## Model predictions
+
+```{r}
+log_troponin_seq <- seq(
+  min(d3$log_troponin), 
+  max(d3$log_troponin), 
+  length.out = 100
+)
+log_ckmb_seq <- seq(
+  min(d3$log_ck_mb), 
+  max(d3$log_ck_mb), 
+  length.out = 100
+)
+
+troponin_grid <- exp(
+  seq(log(0.001), log(max(d3$troponin)), length.out = 100)
+)
+ckmb_grid <- exp(
+  seq(log(0.3), log(max(d3$ck_mb)), length.out = 100)
 )
 ```
 
-```{r}
-# Install pROC if you don't have it already
-# install.packages("pROC")
-
-# Load the pROC package
-library(pROC)
-
-# Get the predicted probabilities from your model
-pred_probs <- predict(logistic_model, type = "response")
-
-# Get the actual outcomes from your data
-actual_outcomes <- d3$result
-
-# Create the ROC curve object
-roc_curve <- roc(actual_outcomes, pred_probs)
-
-# Plot the ROC curve
-plot(roc_curve, main = "ROC Curve", col = "blue", lwd = 2)
-abline(a = 0, b = 1, lty = 2, col = "gray") # Add reference line
-
-# Add AUC to the plot
-auc_value <- auc(roc_curve)
-text(0.6, 0.2, paste("AUC =", round(auc_value, 3)), col = "black")
-```
-
-## Model predictions
 
 troponin
 
@@ -585,8 +616,8 @@ pred_data <-
     systolic_blood_pressure = mean(d3$systolic_blood_pressure),  
     diastolic_blood_pressure = mean(d3$diastolic_blood_pressure),
     blood_sugar = mean(d3$blood_sugar),          
-    ck_mb = quantile(d3$ck_mb, probs = 0.1),                       
-    troponin = seq(min(d3$troponin), max(d3$troponin), length.out = 100) 
+    log_ck_mb = quantile(d3$log_ck_mb, probs = 0.1),                       
+    log_troponin = log_troponin_seq
   )
 
 pred_data$predicted_prob <- 
@@ -596,21 +627,21 @@ pred_data$predicted_prob <-
     type = "response"
   )
 
-x_breaks_original <- c(0.001, 0.01, 0.1, 1, 10)
+x_breaks_lab <- c(0.001, 0.01, 0.1, 1, 10)
 
 pred_data |>
   # mutate(troponin = exp(troponin)) |>
-  ggplot(aes(x = troponin, y = predicted_prob)) +
+  ggplot(aes(x = log_troponin, y = predicted_prob)) +
   geom_line(color = "blue", linewidth = 1) +
   geom_jitter(
     data = d3,
-    aes(x = troponin, y = ifelse(result == "positive", 1, 0)),
+    aes(x = log_troponin, y = ifelse(result == "positive", 1, 0)),
     height = 0.02, alpha = 0.2, color = "orange"
   ) +
   scale_x_continuous(
     "Troponin Level",
-    breaks = log(x_breaks_original),
-    labels = x_breaks_original
+    breaks = log(x_breaks_lab),
+    labels = x_breaks_lab
   ) +
   geom_vline(
     xintercept = exp(quantile(d3$troponin, probs = 0.1)), 
@@ -637,8 +668,8 @@ pred_ck_mb <-
     systolic_blood_pressure = mean(d3$systolic_blood_pressure),  
     diastolic_blood_pressure = mean(d3$diastolic_blood_pressure),
     blood_sugar = mean(d3$blood_sugar),          
-    troponin = quantile(d3$troponin, probs = 0.10),
-    ck_mb = seq(min(d3$ck_mb), max(d3$ck_mb), length.out = 100), 
+    log_troponin = quantile(d3$log_troponin, probs = 0.10),
+    log_ck_mb = seq(min(d3$log_ck_mb), max(d3$log_ck_mb), length.out = 100), 
     
   )
 
@@ -647,14 +678,14 @@ pred_ck_mb$predicted_prob <-
           newdata = pred_ck_mb, 
           type = "response")
 
-x_lab_original_scale <- c(0.3, 3, 30, 300)
+ck_mb_x_breaks_lab <- c(0.3, 3, 30, 300)
 
 pred_ck_mb |> 
-  ggplot(aes(x = ck_mb, y = predicted_prob)) +
+  ggplot(aes(x = log_ck_mb, y = predicted_prob)) +
   geom_line(color = "blue", linewidth = 1) +
   geom_jitter(
     data = d3, 
-    aes(x = ck_mb, y = ifelse(result == "positive", 1, 0)), 
+    aes(x = log_ck_mb, y = ifelse(result == "positive", 1, 0)), 
     height = 0.02, alpha = 0.2, color = "orange"
   ) +
   labs(
@@ -672,14 +703,15 @@ Age
 ```{r}
 pred_age <- 
   tibble(
-    age = seq(min(d3$age), max(d3$age), length.out = 100),              
+    age = seq(min(d3$age), max(d3$age), length.out = 100),
+    # age_group = factor(levels(d3$age_group)),              
     gender = "Male",                     
     heart_rate = mean(d3$heart_rate),
     systolic_blood_pressure = mean(d3$systolic_blood_pressure),  
     diastolic_blood_pressure = mean(d3$diastolic_blood_pressure),
     blood_sugar = mean(d3$blood_sugar),          
-    troponin = quantile(d3$troponin, probs = 0.5),
-    ck_mb = quantile(d3$ck_mb, probs = 0.25), 
+    log_troponin = quantile(d3$log_troponin, probs = 0.5),
+    log_ck_mb = quantile(d3$log_ck_mb, probs = 0.25), 
     
   )
 
@@ -688,6 +720,10 @@ pred_age$predicted_prob <-
           newdata = pred_age, 
           type = "response")
 
+# pred_age |> 
+#   ggplot(aes(x = age_group, y = predicted_prob)) +
+#   geom_bar(stat = "identity", fill = "blue", alpha = 0.7)
+  
 pred_age |> 
   ggplot(aes(x = age, y = predicted_prob)) +
   geom_line(color = "blue", linewidth = 1) +
@@ -706,10 +742,157 @@ pred_age |>
 ```
 
 
+```{r}
+# Create grid for 2D predictions
+log_troponin_seq <- seq(
+  min(d3$log_troponin), 
+  max(d3$log_troponin), 
+  length.out = 100
+)
+log_ckmb_seq <- seq(
+  min(d3$log_ck_mb), 
+  max(d3$log_ck_mb), 
+  length.out = 100
+)
+
+
+
+log_troponin_ckmb_grid <- expand_grid(
+  log_troponin = log_troponin_seq,
+  log_ck_mb = log_ckmb_seq
+)
+
+# Add mean values for other predictors
+prediction_grid <- 
+  log_troponin_ckmb_grid %>%
+  mutate(
+    age = mean(d3$age),
+    gender = factor("Female", levels = c("Female", "Male")),
+    heart_rate = mean(d3$heart_rate),
+    systolic_blood_pressure = mean(d3$systolic_blood_pressure),
+    diastolic_blood_pressure = mean(d3$diastolic_blood_pressure),
+    blood_sugar = mean(d3$blood_sugar)
+  )
+
+# Generate predictions
+# grid_preds <- predict(lasso_fit, prediction_grid, type = "prob")
+# grid_preds_resp <- predict(lasso_fit, prediction_grid)
+grid_preds <- 
+  predict(reduced_model, 
+          newdata = log_troponin_ckmb_grid, 
+          # newdata = prediction_grid, 
+          type = "response")
+
+# Add predictions to grid
+prediction_grid <- bind_cols(
+  # prediction_grid,
+  log_troponin_ckmb_grid,
+  probability = grid_preds
+)
+
+# Create probability bins for a continuous color scale instead of discrete
+prediction_grid <- 
+  prediction_grid %>%
+  mutate(prob_bin = cut(probability, 
+                        breaks = seq(0, 1, by = 0.1),
+                        labels = paste0(seq(0, 90, by = 10), "%")))
+
+# (baypal <- PNWColors::pnw_palette("Bay", 8, type="continuous"))
+
+
+(
+  contour_plot <- 
+    ggplot() +
+    # Add filled contours with continuous scale
+    geom_contour_filled(
+      data = prediction_grid,
+      aes(x = log_troponin, y = log_ck_mb, z = probability),
+      breaks = seq(0, 1, by = 0.1)
+    ) +
+    # Add decision boundary (probability = 0.5)
+    geom_contour(
+      data = prediction_grid,
+      aes(x = log_troponin, y = log_ck_mb, z = probability),
+      breaks = 0.5,
+      color = "white",
+      linewidth = 1
+    ) +
+    # Add points for observed data
+    geom_point(
+      data = d3,
+      aes(x = log_troponin, y = log_ck_mb, shape = result, color = result),
+      alpha = 0.7,
+      size = 3
+    ) +
+    # add example user selected values
+    geom_point(
+      data = tibble(
+        log_troponin = log(0.01), 
+        log_ck_mb = log(10),      
+        result = "positive"        
+      ),
+      aes(x = log_troponin, y = log_ck_mb),
+      color = "black",
+      shape = 9,
+      # alpha = 0.7,
+      size = 4
+    ) +
+    scale_x_continuous(
+      "Troponin (ng/mL)",
+      breaks = log(x_breaks_lab),
+      labels = x_breaks_lab
+    ) +
+    scale_y_continuous(
+      "CK-MB (ng/mL)",
+      breaks = log(ck_mb_x_breaks_lab),
+      labels = ck_mb_x_breaks_lab
+    ) +
+    scale_color_manual(
+      values = c("negative" = "#2E9093", "positive" = "#DD4124"),
+      name = "Heart Attack"
+    ) +
+    scale_shape_manual(
+      values = c("negative" = 16, "positive" = 17),
+      name = "Heart Attack"
+    ) +
+    scale_fill_viridis_d(
+      option = "plasma",
+      name = "Probability",
+      labels = c("0-10%", "10-20%", "20-30%", "30-40%", "40-50%", 
+                 "50-60%", "60-70%", "70-80%", "80-90%", "90-100%")
+    ) +
+    labs(
+      title = "Heart Attack Probability by Troponin and CK-MB Levels",
+      subtitle = "White line shows decision boundary (50% probability)",
+      caption = "All other variables held at their mean values"
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = "right",
+      plot.title = element_text(face = "bold", size = 14),
+      plot.subtitle = element_text(size = 12),
+      axis.title = element_text(face = "bold"),
+      panel.grid.minor = element_blank(),
+      legend.title = element_text(face = "bold")
+    )
+)
+# Print the plot
+print(contour_plot)
+
+```
+
+
 # Save
+
+Save data to be used in Shiny app.
 
 ```{r}
 saveRDS(logistic_model, file = "model/logistic_model.rds")
+saveRDS(reduced_model, file = "model/reduced_model.rds")
 saveRDS(d3, file = "model/model_data.rds")
+saveRDS(log_troponin_seq, file = "model/log_troponin_seq.rds")
+saveRDS(log_ckmb_seq, file = "model/log_ckmb_seq.rds")
+saveRDS(prediction_grid, file = "model/prediction_grid.rds")
 ```
+
 

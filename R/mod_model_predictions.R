@@ -4,44 +4,32 @@
 modelPredictionInput <- function(id) {
   ns <- NS(id)
   tagList(
-    numericInput(
-      ns("age"),
-      "Age (Years)",
-      value = 60,
-      min = min(model_data$age),
-      max = max(model_data$age),
-      step = 1
-    ),
-    radioButtons(
-      ns("gender"),
-      "Gender",
-      choices = c("Female", "Male"), 
-      selected = "Female"
-    ),
-    numericInput(
-      ns("heart_rate"), 
-      "Resting Heart Rate (bpm)", 
-      min = 20, 
-      max = 135, 
-      value = 75
-    ),
-    numericInput(
-      ns("blood_sugar"), 
-      "Blood Glucose (mg/dL)", 
-      min = 35, 
-      max = 500, 
-      value = 100
-    ),
-    sliderInput(
-      ns("blood_pressure"), 
-      "Systolic/Diastolic Blood Pressure (mmHg)", 
-      min = 40, 
-      max = 220, 
-      value = c(80, 120)
-    ),
-    actionButton(
-      ns("about_btn"), 
-      "About"
+    card(
+      card_header(
+        "Patient Information",
+        tooltip(
+          bs_icon("info-circle"),
+          "Logistic regression model indicated that Toponin and Creatine kinase-MB levels are the strongest predictors of heart attacks."
+        )
+      ),
+      sliderInput(
+        ns("ck_mb"),
+        "Creatine kinase-MB (ng/mL)",
+        min = 0.3,
+        max = 300,
+        value = 1
+      ),
+      sliderInput(
+        ns("troponin"), 
+        "Troponin (ng/mL)", 
+        min = 0.001, 
+        max = 0.3, 
+        value = 0.01
+      ),
+      actionButton(
+        ns("about_btn"), 
+        "About"
+      )
     )
   )
 }
@@ -50,37 +38,25 @@ modelPredictionOutput <- function(id) {
   ns <- NS(id)
   tagList(
     value_box(
-      title = "Probability of Heart Attack", 
+      title = "Probability of Heart Attack",
       value = textOutput(ns("prob_ha")),
-      showcase = bs_icon("heart-pulse")
+      showcase = bs_icon("heart-pulse"),
+      max_height = "100px"
     ),
-    
-    layout_column_wrap(
-      width = "400px",
-      card(
-        card_header(
-          "Probability of Positive Result vs. Troponin"
+    card(
+      # card_header("Key Biomarkers"),
+      navset_card_tab(
+        nav_panel(
+          "Troponin & CK-MB Effect",
+          plotOutput(ns("countour_plot"), height = "300px")
         ),
-        plotOutput(ns("troponin_plot")),
-        sliderInput(
-          ns("ck_mb"), 
-          "Creatine kinase-MB (ng/mL)", 
-          min = 0.3, 
-          max = 300, 
-          value = 1
-        )
-      ),
-      card(
-        card_header(
-          "Probability of Positive Result vs. Creatine kinase-MB"
+        nav_panel(
+          "Troponin Effect",
+          plotOutput(ns("troponin_plot"), height = "300px")
         ),
-        plotOutput(ns("ck_mb_plot")),
-        sliderInput(
-          ns("troponin"), 
-          "Troponin (ng/mL)", 
-          min = 0.001, 
-          max = 0.3, 
-          value = 0.01
+        nav_panel(
+          "CK-MB Effect",
+          plotOutput(ns("ckmb_plot"), height = "300px")
         )
       )
     )
@@ -92,68 +68,74 @@ modelPredictionServer <- function(id) {
   moduleServer(id, function(input, output, session) {
     output$prob_ha <- renderText({
       pred_data <- predict_result(
-        age = input$age,
-        gender = input$gender,
-        heart_rate = input$heart_rate,
-        systolic_blood_pressure = input$blood_pressure[2],
-        diastolic_blood_pressure = input$blood_pressure[1],
-        blood_sugar = input$blood_sugar,
-        # ck_mb input is on original scale but model uses log transformed values
+        # age = input$age,
+        # gender = input$gender,
+        # heart_rate = input$heart_rate,
+        # systolic_blood_pressure = input$blood_pressure[2],
+        # diastolic_blood_pressure = input$blood_pressure[1],
+        # blood_sugar = input$blood_sugar,
+        # # ck_mb input is on original scale but model uses log transformed values
         ck_mb = log(input$ck_mb),
         troponin = log(input$troponin),
-        logistic_model = logistic_model
+        model = reduced_model
       )
       prob <- round(pred_data$predicted_prob, 2)*100
       paste(prob, "%")
     })
     
+    output$countour_plot <- renderPlot({
+      plot_contour(
+        prediction_grid = prediction_grid, 
+        model_data = model_data, 
+        user_data = tibble(
+          log_troponin = log(input$troponin),
+          log_ck_mb = log(input$ck_mb)
+        )
+      )
+    })
     
     output$troponin_plot <- renderPlot({
       pred_data <- predict_result(
-        age = input$age,
-        gender = input$gender,
-        heart_rate = input$heart_rate,
-        systolic_blood_pressure = input$blood_pressure[2],
-        diastolic_blood_pressure = input$blood_pressure[1],
-        blood_sugar = input$blood_sugar,
+        # age = input$age,
+        # gender = input$gender,
+        # heart_rate = input$heart_rate,
+        # systolic_blood_pressure = input$blood_pressure[2],
+        # diastolic_blood_pressure = input$blood_pressure[1],
+        # blood_sugar = input$blood_sugar,
         # ck_mb input is on original scale but model uses log transformed values
         ck_mb = log(input$ck_mb),
-        troponin = seq(
-          min(model_data$troponin), max(model_data$troponin), length.out = 100
-        ),
-        logistic_model = logistic_model
+        troponin = log_troponin_seq,
+        model = reduced_model
       )
       
       plot_pred_data(
         pred_data,
         model_data,
-        "troponin",
+        "log_troponin",
         "Troponin (ng/mL)",
         x_breaks_original = c(0.001, 0.01, 0.1, 1, 10),
         x_int = input$troponin
       )
     })
     
-    output$ck_mb_plot <- renderPlot({
+    output$ckmb_plot <- renderPlot({
       pred_data <- predict_result(
-        age = input$age,
-        gender = input$gender,
-        heart_rate = input$heart_rate,
-        systolic_blood_pressure = input$blood_pressure[2],
-        diastolic_blood_pressure = input$blood_pressure[1],
-        blood_sugar = input$blood_sugar,
+        # age = input$age,
+        # gender = input$gender,
+        # heart_rate = input$heart_rate,
+        # systolic_blood_pressure = input$blood_pressure[2],
+        # diastolic_blood_pressure = input$blood_pressure[1],
+        # blood_sugar = input$blood_sugar,
         # troponin input is on original scale but model uses log transformed values
         troponin = log(input$troponin),
-        ck_mb = seq(
-          min(model_data$ck_mb), max(model_data$ck_mb), length.out = 100
-        ),
-        logistic_model = logistic_model
+        ck_mb = log_ckmb_seq,
+        model = reduced_model
       )
       
       plot_pred_data(
         pred_data,
         model_data,
-        "ck_mb",
+        "log_ck_mb",
         "Creatine kinase-MB (ng/mL)",
         x_breaks_original = c(0.3, 3, 30, 300),
         x_int = input$ck_mb
@@ -187,13 +169,7 @@ modelPredictionServer <- function(id) {
 modelPredictionApp <- function() {
   ui <- page_sidebar(
     title = "Predicting the Risk of Heart Attack",
-    sidebar = sidebar(
-      title = h4(
-        "Patient Information",
-      ),
-      width = 350,
-      modelPredictionInput("mod_pred")
-    ),
+    sidebar = modelPredictionInput("mod_pred"),
     modelPredictionOutput("mod_pred")
   )
   
