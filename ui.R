@@ -1,4 +1,5 @@
 ui <- page_navbar(
+  header = shinyFeedback::useShinyFeedback(),
   title = "Predicting the Risk of Heart Attack",
   theme = bs_theme(version = 5, bootswatch = "litera"),
   nav_panel(

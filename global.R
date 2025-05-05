@@ -1,6 +1,7 @@
 library(shiny)
 library(bslib)
 library(bsicons)
+library(shinyFeedback)
 library(shinyWidgets)
 library(dplyr)
 library(tidyr)

@@ -74,6 +74,25 @@ modelPredictionOutput <- function(id) {
 
 modelPredictionServer <- function(id) {
   moduleServer(id, function(input, output, session) {
+    
+    # Validate troponin input
+    observeEvent( input$troponin,{
+      shinyFeedback::feedbackDanger(
+        inputId = "troponin",
+        show = input$troponin < 0.001 || input$troponin > 10,
+        text = "Troponin must be between 0.001 and 10 ng/mL"
+      )
+    })
+    
+    # Validate ck_mb input
+    observeEvent(input$ck_mb, {
+      shinyFeedback::feedbackDanger(
+        inputId = "ck_mb",
+        show = input$ck_mb < 0.3 || input$ck_mb > 300,
+        text = "CK-MB must be between 0.3 and 300 ng/mL"
+      )
+    })
+    
     output$prob_ha <- renderText({
       pred_data <- predict_result(
         ck_mb = log(input$ck_mb),
