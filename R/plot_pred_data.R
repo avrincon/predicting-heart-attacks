@@ -14,17 +14,13 @@ plot_pred_data <- function(pred_data,
                            x_var, 
                            x_lab, 
                            x_breaks_original,
-                           x_int) {
+                           x_int,
+                           title,
+                           show_data = TRUE) {
   x_var <- rlang::sym(x_var)
   
-  pred_data |> 
-    ggplot(aes(x = !!x_var, y = predicted_prob)) +
+  p <- ggplot(pred_data, aes(x = !!x_var, y = predicted_prob)) +
     geom_line(color = "#0f85a0", linewidth = 1) +
-    geom_jitter(
-      data = mod_data, 
-      aes(x = !!x_var, y = ifelse(result == "positive", 1, 0)), 
-      height = 0.02, alpha = 0.3, color = "#edd746"
-    ) +
     scale_x_continuous(
       x_lab,
       breaks = log(x_breaks_original),
@@ -36,11 +32,26 @@ plot_pred_data <- function(pred_data,
       color = "#dd4124",
       linewidth = 1
     ) +
-    ylab("Probability of Positive Result") +
+    labs(
+      title = title, 
+      y = "Probability of Positive Result"
+    ) +
     geom_hline(yintercept = c(0, 1), linetype = "dashed", color = "gray") +
     theme_minimal() +
     theme(
-      text = element_text(size = 15)
+      text = element_text(size = 15),
+      plot.title = element_text(face = "bold")
     )
-   
+  
+  # Conditionally add observed data points
+  if (show_data) {
+    p <- p +
+      geom_jitter(
+        data = mod_data, 
+        aes(x = !!x_var, y = ifelse(result == "positive", 1, 0)), 
+        height = 0.02, alpha = 0.3, color = "#edd746"
+      )
+  }
+  
+  return(p)
 }

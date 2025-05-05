@@ -1,5 +1,5 @@
-plot_contour <- function(prediction_grid, model_data, user_data) {
-  ggplot() +
+plot_contour <- function(prediction_grid, model_data, user_data, show_data = TRUE) {
+  p <- ggplot() +
     # Add filled contours with continuous scale
     geom_contour_filled(
       data = prediction_grid,
@@ -13,14 +13,22 @@ plot_contour <- function(prediction_grid, model_data, user_data) {
       breaks = 0.5,
       color = "white",
       linewidth = 1
-    ) +
-    # Add points for observed data
-    geom_point(
-      data = model_data,
-      aes(x = log_troponin, y = log_ck_mb, shape = result, color = result),
-      alpha = 0.7,
-      size = 3
-    ) +
+    )
+  
+  # Conditionally add observed data points
+  if (show_data) {
+    p <- p +
+      # Add points for observed data
+      geom_point(
+        data = model_data,
+        aes(x = log_troponin, y = log_ck_mb, shape = result, color = result),
+        alpha = 0.7,
+        size = 3
+      )
+  }
+  
+  # Add user data point regardless of show_data setting
+  p <- p +
     # add example user selected values
     geom_point(
       data = user_data,
@@ -36,7 +44,7 @@ plot_contour <- function(prediction_grid, model_data, user_data) {
       labels = troponin_x_breaks_lab
     ) +
     scale_y_continuous(
-      "CK-MB (ng/mL)",
+      "Creatine kinase-MB (ng/mL)",
       breaks = log(ck_mb_x_breaks_lab),
       labels = ck_mb_x_breaks_lab
     ) +
@@ -57,15 +65,18 @@ plot_contour <- function(prediction_grid, model_data, user_data) {
     labs(
       title = "Heart Attack Probability by Troponin and CK-MB Levels",
       subtitle = "White line shows decision boundary (50% probability)",
-      caption = "All other variables held at their mean values"
+      # caption = "All other variables held at their mean values"
     ) +
     theme_minimal() +
     theme(
+      text = element_text(size = 16),
       legend.position = "right",
-      plot.title = element_text(face = "bold", size = 14),
-      plot.subtitle = element_text(size = 12),
+      plot.title = element_text(face = "bold"), #, size = 14
+      # plot.subtitle = element_text(size = 12),
       axis.title = element_text(face = "bold"),
       panel.grid.minor = element_blank(),
       legend.title = element_text(face = "bold")
     )
+  
+  return(p)
 }

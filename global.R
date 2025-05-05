@@ -1,6 +1,7 @@
 library(shiny)
 library(bslib)
 library(bsicons)
+library(shinyWidgets)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
