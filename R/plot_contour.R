@@ -56,6 +56,19 @@ plot_contour <- function(prediction_grid,
         alpha = 0.7,
         size = 3
       )
+  } else {
+    # When not showing data, add dummy points that are invisible but maintain legend structure
+    p <- p +
+      geom_point(
+        data = data.frame(
+          log_troponin = log(0.1),
+          log_ck_mb = log(5),
+          result = c("Positive", "Negative")
+        ),
+        aes(x = log_troponin, y = log_ck_mb, shape = result, color = result),
+        alpha = 0,  # Make them invisible
+        size = 0
+      )
   }
  
 
@@ -97,7 +110,8 @@ plot_contour <- function(prediction_grid,
     ) +
     labs(
       title = "Heart Attack Probability by Troponin and CK-MB Levels",
-      subtitle = "White line shows decision boundary (50% probability)"
+      subtitle = "White line shows decision boundary (50% probability)",
+      caption = "Other variable were at their mean values."
     ) +
     theme_minimal() +
     theme(

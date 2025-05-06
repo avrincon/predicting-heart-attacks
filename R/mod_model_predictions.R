@@ -178,10 +178,19 @@ modelPredictionServer <- function(id) {
 # mod app -----------------------------------------------------------------
 
 modelPredictionApp <- function() {
-  ui <- page_sidebar(
+  ui <- page_fluid(
     title = "Predicting the Risk of Heart Attack",
-    sidebar = modelPredictionInput("mod_pred"),
-    modelPredictionOutput("mod_pred")
+    # sidebar = modelPredictionInput("mod_pred"),
+    # modelPredictionOutput("mod_pred")
+    layout_sidebar(
+      sidebar = sidebar(
+        width = 350,
+        modelPredictionInput("mod_pred")
+      ),
+      
+      modelPredictionOutput("mod_pred")
+      
+    )
   )
   
   server <- function(input, output, session) {
