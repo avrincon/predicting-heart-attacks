@@ -2,37 +2,27 @@
 #' 
 #' Get logistic model predictions on new data
 #'
-#' @param age Age in years
-#' @param gender Gender. One of "Female" or "Male".
-#' @param heart_rate Heart Rate in bpm 
-#' @param systolic_blood_pressure Systolic blood pressure
-#' @param diastolic_blood_pressure Diastolic blood pressure
-#' @param blood_sugar Blood sugar levels
 #' @param ck_mb Creatine kinase-MB (ng/mL)
 #' @param troponin Troponin (ng/mL)
-#' @param logistic_model Logistic model object
+#' @param model Logistic model object
+#' @param model_data Data used to fit model
 #'
 #' @returns A tibble with predicted results based on data and logistic model
 predict_result <- function(
-    # age,
-    # gender,
-    # heart_rate,
-    # systolic_blood_pressure,
-    # diastolic_blood_pressure,
-    # blood_sugar,
     ck_mb,
     troponin,
-    model
+    model,
+    model_data
 ) {
   
   pred_data <- 
     tibble(
-      # age = age,
-      # gender = gender,
-      # heart_rate = heart_rate,
-      # systolic_blood_pressure = systolic_blood_pressure,
-      # diastolic_blood_pressure = diastolic_blood_pressure,
-      # blood_sugar = blood_sugar,
+      age = mean(model_data$age),
+      gender = levels(model_data$gender)[1],
+      heart_rate = mean(model_data$heart_rate),
+      systolic_blood_pressure = mean(model_data$systolic_blood_pressure),
+      diastolic_blood_pressure = mean(model_data$diastolic_blood_pressure),
+      blood_sugar = mean(model_data$blood_sugar),
       log_ck_mb = ck_mb,
       log_troponin = troponin
     )

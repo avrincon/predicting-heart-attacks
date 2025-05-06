@@ -16,8 +16,8 @@
 #' @return A ggplot object with the contour plot visualization
 #'
 #' @examples
-#' # user_point <- tibble(log_troponin = log(0.01), log_ck_mb = log(1))
-#' # plot_contour(prediction_grid, model_data, user_point)
+#' user_point <- tibble(log_troponin = log(0.01), log_ck_mb = log(1))
+#' plot_contour(prediction_grid, model_data, user_point)
 plot_contour <- function(prediction_grid, 
                          model_data, 
                          user_data, 
@@ -97,7 +97,6 @@ plot_contour <- function(prediction_grid,
       labels = c("0-10%", "10-20%", "20-30%", "30-40%", "40-50%",
                  "50-60%", "60-70%", "70-80%", "80-90%", "90-100%")
     ) +
-    # Define the shape for user data
     scale_shape_manual(
       values = c("Negative" = 16, "Positive" = 17, "Current Patient" = 15),
       name = "Data Points"

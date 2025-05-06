@@ -97,7 +97,8 @@ modelPredictionServer <- function(id) {
       pred_data <- predict_result(
         ck_mb = log(input$ck_mb),
         troponin = log(input$troponin),
-        model = reduced_model
+        model = logistic_model,
+        model_data = model_data
       )
       prob <- round(pred_data$predicted_prob, 2)*100
       paste(prob, "%")
@@ -119,7 +120,8 @@ modelPredictionServer <- function(id) {
       pred_data <- predict_result(
         ck_mb = log(input$ck_mb),
         troponin = log_troponin_seq,
-        model = reduced_model
+        model = logistic_model,
+        model_data = model_data
       )
       
       plot_pred_data(
@@ -138,7 +140,8 @@ modelPredictionServer <- function(id) {
       pred_data <- predict_result(
         troponin = log(input$troponin),
         ck_mb = log_ckmb_seq,
-        model = reduced_model
+        model = logistic_model,
+        model_data = model_data
       )
       
       plot_pred_data(
@@ -180,8 +183,7 @@ modelPredictionServer <- function(id) {
 modelPredictionApp <- function() {
   ui <- page_fluid(
     title = "Predicting the Risk of Heart Attack",
-    # sidebar = modelPredictionInput("mod_pred"),
-    # modelPredictionOutput("mod_pred")
+    
     layout_sidebar(
       sidebar = sidebar(
         width = 350,

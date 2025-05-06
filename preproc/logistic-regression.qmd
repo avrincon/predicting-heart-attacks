@@ -26,7 +26,7 @@ for (file in list.files("R", pattern = "\\.R$", full.names = TRUE)) {
 ```
 
 ```{r}
-d <- read_csv("data/heart_attack_risk_clean.csv")
+d_raw <- read_csv("data/heart_attack_risk_clean.csv")
 ```
 
 # Exploratory data checks
@@ -36,7 +36,7 @@ d <- read_csv("data/heart_attack_risk_clean.csv")
 
 
 ```{r}
-d |> 
+d_raw |> 
   count(result) |> 
   mutate(prop = n / sum(n))
 ```
@@ -44,7 +44,7 @@ d |>
 More positive than negative heart attack results but overall not too unbalanced.
 
 ```{r}
-d |> 
+d_raw |> 
   group_by(result) |>
   summarise(
     mean_trop = mean(troponin),
@@ -56,7 +56,7 @@ d |>
 ## Check distribution of predictor variables
 
 ```{r}
-d |>  
+d_raw |>  
   select(age, gender, heart_rate, systolic_blood_pressure, 
          diastolic_blood_pressure, blood_sugar, ck_mb, troponin) |> 
   summary() 
@@ -75,7 +75,7 @@ custom_labels <- c(
   troponin = "Troponin (ng/mL)"
 )
 
-d |> 
+d_raw |> 
   select(age, heart_rate, systolic_blood_pressure, diastolic_blood_pressure, 
          blood_sugar, ck_mb, troponin) |> 
   gather(key = "variable", value = "value") |> 
@@ -86,7 +86,7 @@ d |>
   labs(title = "Boxplots for Numeric Predictors")
 
 (p_hist <- 
-    d |> 
+    d_raw |> 
     select(age, heart_rate, systolic_blood_pressure, diastolic_blood_pressure, 
            blood_sugar, ck_mb, troponin) |> 
     gather(key = "variable", value = "value") |> 
@@ -117,25 +117,24 @@ d |>
 # )
 ```
 
-- Exclude three observations for `heart_rate` with extreme anomalous results
-- Apply log transformation to `troponin` and `ck_mb` that are highly skewed
+- Exclude three observations for `heart_rate` with extreme anomalous results that are likely measurement erros
+- Apply log transformation to `troponin` and `ck_mb` since they are both highly skewed
 
 
 ```{r}
-# d |> filter(heart_rate > 900) |> View()
+# d_raw |> filter(heart_rate > 900) |> View()
 
-d2 <- 
-  d |> 
+d_clean <- 
+  d_raw |> 
   filter(heart_rate < 900) |> 
   mutate(
     log_ck_mb = log(ck_mb),
-    log_troponin = log(troponin),
-    # age_group = cut(
-    #   age, 
-    #   breaks = c(0, 40, 50, 60, 70, 80, 110),
-    #   labels = c("<40", "40-50", "50-60", "60-70", "70-80", ">80"),
-    #   right = FALSE
-    # )
+    log_troponin = log(troponin)
+  ) |> 
+  mutate(
+    # set categorical variables as factors
+    across(result, ~factor(., levels = c("negative", "positive"))),
+    across(gender, ~factor(., levels = c("Female", "Male")))
   )
 ```
 
@@ -151,7 +150,7 @@ custom_labels2 <- c(
 )
 
 (p_hist2 <- 
-    d2 |> 
+    d_clean |> 
     select(age, heart_rate, systolic_blood_pressure, diastolic_blood_pressure, 
            blood_sugar, log_ck_mb, log_troponin) |> 
     gather(key = "variable", value = "value") |> 
@@ -183,10 +182,10 @@ custom_labels2 <- c(
 ```
 
 
-Create correlation matrix to check for multicollinearity
+Create correlation matrix to check for highly correlated predictors
 
 ```{r}
-d2 |> 
+d_clean |> 
   select(age,heart_rate, systolic_blood_pressure,
          diastolic_blood_pressure, 
          blood_sugar, log_ck_mb, log_troponin) |> 
@@ -198,7 +197,7 @@ Check balance of result again
 
 ```{r}
 (p_result <- 
-  d2 |> 
+  d_clean |> 
   count(result) |> 
   mutate(
     prop = format(n / sum(n) * 100, digits = 1, nsmall = 1),
@@ -239,7 +238,7 @@ Check balance of result again
  
 ```{r}
 (p_gender <- 
-  d2 |> 
+  d_clean |> 
   count(gender) |> 
   mutate(prop = format(n / sum(n) * 100, digits = 1, nsmall = 1),
          lab = paste0(prop, "%")) |> 
@@ -276,16 +275,6 @@ Check balance of result again
 
 ## Build logistic regression model
 
-```{r}
-d3 <- 
-  d2 |> 
-  # set categorical variables as factors
-  mutate(
-    across(result, ~factor(., levels = c("negative", "positive"))),
-    across(gender, ~factor(., levels = c("Female", "Male")))
-  )
-```
-
 
 ```{r}
 logistic_model <- 
@@ -293,43 +282,42 @@ logistic_model <-
     result ~ age + gender + heart_rate + systolic_blood_pressure + 
       diastolic_blood_pressure + blood_sugar + log_ck_mb + log_troponin,
     family = binomial(link = "logit"),
-    data = d3
+    data = d_clean
   )
 
 reduced_model <- 
   glm(
     result ~ log_ck_mb + log_troponin,
     family = binomial(link = "logit"),
-    data = d3
+    data = d_clean
   )
 
-lr_age <- 
+null_mod <-
   glm(
-    result ~ age + log_ck_mb + log_troponin,
+    result ~ 1,
     family = binomial(link = "logit"),
-    data = d3
+    data = d_clean
   )
 ```
 
 
 ```{r}
-anova(logistic_model, lr_age, test = "Chisq")
+anova(null_mod, logistic_model, test = "Chisq")
 anova(logistic_model, reduced_model, test = "Chisq")
-anova(reduced_model, lr_age, test = "Chisq")
 ```
 
-The reduced model, including only CK-MB and troponin has the same predictive power as the full logistic model.
-May use either model? Or keep reduced model because it is simpler?
+Full model is significantly better than null model containing only an intercept, indicating that the combination of predictors in the full model are collectively significant in predicting the risk of heart attacks.
+
+The reduced model, including only CK-MB and troponin is not significantly different from the full logistic model. Could consider using either model in the final analysis but will use the full model in this case.
 
 ```{r}
 fit_summary <- 
   bind_rows(
     glance(logistic_model),
-    glance(reduced_model),
-    glance(lr_age)
+    glance(reduced_model)
   ) |> 
   mutate(
-    Model = c("Full Model", "Reduced Model", "Age Model"), 
+    Model = c("Full Model", "Reduced Model"), 
     .before = 1
   ) |> 
   mutate(across(where(is.numeric), round)) |> 
@@ -339,6 +327,8 @@ fit_summary |>
   flextable() |> 
   autofit()
 ```
+
+Information criteria (AIC and BIC) suggest that the reduced model is slightly preferred to the full model.
 
 
 ## Model diagnostics
@@ -359,16 +349,17 @@ influencePlot(reduced_model)
 
 cooksd <- cooks.distance(logistic_model)
 plot(cooksd, pch = 20, main = "Cook's Distance")
-abline(h = 4/nrow(d3), col = "red")  # Rule of thumb threshold
+abline(h = 4/nrow(d_clean), col = "red")  # Rule of thumb threshold
 
 tibble(cooksd = round(cooksd, 4)) |> 
   arrange(desc(cooksd))
 ```
 
-There are some influential points but all Cook's D <1.0
+There are influential points in both the full and reduced models but all Cook's D <1.0. The full model has fewer and less influential points than the reduced model, suggesting that the full model is more stable. Influential points may be biologically valid in this case and so it is unclear whether they should be removed. Decided to keep them in the model since the model was still able to converge.
+
 
 ```{r}
-# d3 |>
+# d_clean |>
 #   slice(c(30, 127, 209, 585, 780, 1265)) |>
 #   View()
 ```
@@ -386,15 +377,14 @@ pchisq(logistic_model$deviance, logistic_model$df.residual, lower.tail = FALSE)
 ```{r}
 summary(logistic_model)
 summary(reduced_model)
-summary(lr_age)
 ```
 
 ```{r}
-confint(logistic_model)
-confint(reduced_model)
+round(confint(logistic_model), 3)
+round(confint(reduced_model), 3)
 ```
 
-Age has an apparent, perhaps un-intuative, negative relationship with heart attack risk. However, biomarkers like troponin and CK-MB are the true drivers of heart attack risk. Older people tend to have higher levels of these biomarkers, which creates an apparent relationship between age and heart attacks. When we control for the biomarker levels directly, we find that for people with the same biomarker levels, younger people might actually have a slightly higher risk (hence the negative coefficient). Having said that, the reduced model has a smaller AIC and BIC, and has the same predictive power as the full model, suggesting that age is overall not a significant predictor of heart attacks.
+Although not quite statistically significant, age has an apparent, perhaps un-intuitive, negative relationship with heart attack risk. However, biomarkers like troponin and CK-MB are the true drivers of heart attack risk. Older people tend to have higher levels of these biomarkers, which creates an apparent relationship between age and heart attacks. When we control for the biomarker levels directly, we find that for people with the same biomarker levels, younger people might actually have a slightly higher risk (hence the negative coefficient). 
 
 ```{r}
 mod_summary <- 
@@ -474,7 +464,7 @@ predicted_classes <-
   factor(predicted_classes, levels = c("negative", "positive"))
 
 # Create confusion matrix and get multiple metrics at once
-cm <- caret::confusionMatrix(predicted_classes, d3$result)
+cm <- caret::confusionMatrix(predicted_classes, d_clean$result)
 ```
 
 ```{r}
@@ -534,7 +524,7 @@ library(yardstick)
 
 predictions <- 
   tibble(
-  truth = d3$result,
+  truth = d_clean$result,
   prob = predict(logistic_model, type = "response")  # Predicted probabilities
 )
 # xx <- augment(logistic_model, type.predict = "response") 
@@ -586,21 +576,21 @@ p_roc
 
 ```{r}
 log_troponin_seq <- seq(
-  min(d3$log_troponin), 
-  max(d3$log_troponin), 
+  min(d_clean$log_troponin), 
+  max(d_clean$log_troponin), 
   length.out = 100
 )
 log_ckmb_seq <- seq(
-  min(d3$log_ck_mb), 
-  max(d3$log_ck_mb), 
+  min(d_clean$log_ck_mb), 
+  max(d_clean$log_ck_mb), 
   length.out = 100
 )
 
 troponin_grid <- exp(
-  seq(log(0.001), log(max(d3$troponin)), length.out = 100)
+  seq(log(0.001), log(max(d_clean$troponin)), length.out = 100)
 )
 ckmb_grid <- exp(
-  seq(log(0.3), log(max(d3$ck_mb)), length.out = 100)
+  seq(log(0.3), log(max(d_clean$ck_mb)), length.out = 100)
 )
 ```
 
@@ -610,13 +600,13 @@ troponin
 ```{r}
 pred_data <- 
   tibble(
-    age = mean(d3$age),              
+    age = mean(d_clean$age),              
     gender = "Female",                     
-    heart_rate = mean(d3$heart_rate),
-    systolic_blood_pressure = mean(d3$systolic_blood_pressure),  
-    diastolic_blood_pressure = mean(d3$diastolic_blood_pressure),
-    blood_sugar = mean(d3$blood_sugar),          
-    log_ck_mb = quantile(d3$log_ck_mb, probs = 0.1),                       
+    heart_rate = mean(d_clean$heart_rate),
+    systolic_blood_pressure = mean(d_clean$systolic_blood_pressure),  
+    diastolic_blood_pressure = mean(d_clean$diastolic_blood_pressure),
+    blood_sugar = mean(d_clean$blood_sugar),          
+    log_ck_mb = quantile(d_clean$log_ck_mb, probs = 0.1),                       
     log_troponin = log_troponin_seq
   )
 
@@ -634,7 +624,7 @@ pred_data |>
   ggplot(aes(x = log_troponin, y = predicted_prob)) +
   geom_line(color = "blue", linewidth = 1) +
   geom_jitter(
-    data = d3,
+    data = d_clean,
     aes(x = log_troponin, y = ifelse(result == "positive", 1, 0)),
     height = 0.02, alpha = 0.2, color = "orange"
   ) +
@@ -644,7 +634,7 @@ pred_data |>
     labels = x_breaks_lab
   ) +
   geom_vline(
-    xintercept = exp(quantile(d3$troponin, probs = 0.1)), 
+    xintercept = exp(quantile(d_clean$troponin, probs = 0.1)), 
     linetype = "dashed", 
     color = "red"
   ) +
@@ -662,14 +652,14 @@ CK MB
 ```{r}
 pred_ck_mb <- 
   tibble(
-    age = mean(d3$age),              
+    age = mean(d_clean$age),              
     gender = "Female",                     
-    heart_rate = mean(d3$heart_rate),
-    systolic_blood_pressure = mean(d3$systolic_blood_pressure),  
-    diastolic_blood_pressure = mean(d3$diastolic_blood_pressure),
-    blood_sugar = mean(d3$blood_sugar),          
-    log_troponin = quantile(d3$log_troponin, probs = 0.10),
-    log_ck_mb = seq(min(d3$log_ck_mb), max(d3$log_ck_mb), length.out = 100), 
+    heart_rate = mean(d_clean$heart_rate),
+    systolic_blood_pressure = mean(d_clean$systolic_blood_pressure),  
+    diastolic_blood_pressure = mean(d_clean$diastolic_blood_pressure),
+    blood_sugar = mean(d_clean$blood_sugar),          
+    log_troponin = quantile(d_clean$log_troponin, probs = 0.10),
+    log_ck_mb = seq(min(d_clean$log_ck_mb), max(d_clean$log_ck_mb), length.out = 100), 
     
   )
 
@@ -684,7 +674,7 @@ pred_ck_mb |>
   ggplot(aes(x = log_ck_mb, y = predicted_prob)) +
   geom_line(color = "blue", linewidth = 1) +
   geom_jitter(
-    data = d3, 
+    data = d_clean, 
     aes(x = log_ck_mb, y = ifelse(result == "positive", 1, 0)), 
     height = 0.02, alpha = 0.2, color = "orange"
   ) +
@@ -703,15 +693,14 @@ Age
 ```{r}
 pred_age <- 
   tibble(
-    age = seq(min(d3$age), max(d3$age), length.out = 100),
-    # age_group = factor(levels(d3$age_group)),              
+    age = seq(min(d_clean$age), max(d_clean$age), length.out = 100),
     gender = "Male",                     
-    heart_rate = mean(d3$heart_rate),
-    systolic_blood_pressure = mean(d3$systolic_blood_pressure),  
-    diastolic_blood_pressure = mean(d3$diastolic_blood_pressure),
-    blood_sugar = mean(d3$blood_sugar),          
-    log_troponin = quantile(d3$log_troponin, probs = 0.5),
-    log_ck_mb = quantile(d3$log_ck_mb, probs = 0.25), 
+    heart_rate = mean(d_clean$heart_rate),
+    systolic_blood_pressure = mean(d_clean$systolic_blood_pressure),  
+    diastolic_blood_pressure = mean(d_clean$diastolic_blood_pressure),
+    blood_sugar = mean(d_clean$blood_sugar),          
+    log_troponin = quantile(d_clean$log_troponin, probs = 0.5),
+    log_ck_mb = quantile(d_clean$log_ck_mb, probs = 0.25), 
     
   )
 
@@ -720,15 +709,12 @@ pred_age$predicted_prob <-
           newdata = pred_age, 
           type = "response")
 
-# pred_age |> 
-#   ggplot(aes(x = age_group, y = predicted_prob)) +
-#   geom_bar(stat = "identity", fill = "blue", alpha = 0.7)
-  
+
 pred_age |> 
   ggplot(aes(x = age, y = predicted_prob)) +
   geom_line(color = "blue", linewidth = 1) +
   geom_jitter(
-    data = d3, 
+    data = d_clean, 
     aes(x = age, y = ifelse(result == "positive", 1, 0)), 
     height = 0.02, alpha = 0.2, color = "orange"
   ) +
@@ -745,13 +731,13 @@ pred_age |>
 ```{r}
 # Create grid for 2D predictions
 log_troponin_seq <- seq(
-  min(d3$log_troponin), 
-  max(d3$log_troponin), 
+  min(d_clean$log_troponin), 
+  max(d_clean$log_troponin), 
   length.out = 100
 )
 log_ckmb_seq <- seq(
-  min(d3$log_ck_mb), 
-  max(d3$log_ck_mb), 
+  min(d_clean$log_ck_mb), 
+  max(d_clean$log_ck_mb), 
   length.out = 100
 )
 
@@ -766,27 +752,27 @@ log_troponin_ckmb_grid <- expand_grid(
 prediction_grid <- 
   log_troponin_ckmb_grid %>%
   mutate(
-    age = mean(d3$age),
-    gender = factor("Female", levels = c("Female", "Male")),
-    heart_rate = mean(d3$heart_rate),
-    systolic_blood_pressure = mean(d3$systolic_blood_pressure),
-    diastolic_blood_pressure = mean(d3$diastolic_blood_pressure),
-    blood_sugar = mean(d3$blood_sugar)
+    age = mean(d_clean$age),
+    gender = levels(d_clean$gender)[1],
+    heart_rate = mean(d_clean$heart_rate),
+    systolic_blood_pressure = mean(d_clean$systolic_blood_pressure),
+    diastolic_blood_pressure = mean(d_clean$diastolic_blood_pressure),
+    blood_sugar = mean(d_clean$blood_sugar)
   )
 
 # Generate predictions
 # grid_preds <- predict(lasso_fit, prediction_grid, type = "prob")
 # grid_preds_resp <- predict(lasso_fit, prediction_grid)
 grid_preds <- 
-  predict(reduced_model, 
-          newdata = log_troponin_ckmb_grid, 
-          # newdata = prediction_grid, 
+  predict(logistic_model, 
+          # newdata = log_troponin_ckmb_grid, 
+          newdata = prediction_grid,
           type = "response")
 
 # Add predictions to grid
 prediction_grid <- bind_cols(
-  # prediction_grid,
-  log_troponin_ckmb_grid,
+  prediction_grid,
+  # log_troponin_ckmb_grid,
   probability = grid_preds
 )
 
@@ -819,7 +805,7 @@ prediction_grid <-
     ) +
     # Add points for observed data
     geom_point(
-      data = d3,
+      data = d_clean,
       aes(x = log_troponin, y = log_ck_mb, shape = result, color = result),
       alpha = 0.7,
       size = 3
@@ -889,7 +875,7 @@ Save data to be used in Shiny app.
 ```{r}
 saveRDS(logistic_model, file = "model/logistic_model.rds")
 saveRDS(reduced_model, file = "model/reduced_model.rds")
-saveRDS(d3, file = "model/model_data.rds")
+saveRDS(d_clean, file = "model/model_data.rds")
 saveRDS(log_troponin_seq, file = "model/log_troponin_seq.rds")
 saveRDS(log_ckmb_seq, file = "model/log_ckmb_seq.rds")
 saveRDS(prediction_grid, file = "model/prediction_grid.rds")
