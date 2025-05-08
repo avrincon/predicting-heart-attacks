@@ -59,22 +59,6 @@ modelDiagnosticsServer <- function(id) {
       p_roc
     })
     
-    observeEvent(input$model_info_btn, {
-      showModal(modalDialog(
-        title = "Model Information",
-        tagList(
-          "This logistic regression model was trained to predict heart attack risk based on various biomarkers. ",
-          "The model achieved an AUC of 0.97, indicating excellent predictive performance. ",
-          "The most important predictors were Troponin and CK-MB levels, which are established biomarkers for heart damage. "
-        ),
-        easyClose = TRUE,
-        footer = NULL
-      ))
-    })
-    
-    
-    
-    
   })
 }
 

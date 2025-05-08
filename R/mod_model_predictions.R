@@ -31,13 +31,9 @@ modelPredictionInput <- function(id) {
       materialSwitch(
         inputId = ns("show_data"),
         label = "Show Data", 
-        value = TRUE,
+        value = FALSE,
         status = "success"
-      )#,
-      # actionButton(
-      #   ns("about_btn"), 
-      #   "About"
-      # )
+      )
     )
   )
 }

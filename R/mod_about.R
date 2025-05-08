@@ -1,16 +1,15 @@
 #' About Module UI
 #'
 #' @param id The module ID
-#'
-#' @return A UI definition for the About module
-#' 
-#' @export
 aboutUI <- function(id) {
   ns <- NS(id)
   tagList(
-    card(
-      card_header("About This App"),
-      includeMarkdown("inst/app/www/about.md")
+    div(
+      style = paste0("max-width: 800px; margin: 0 auto;"),
+      card(
+        card_header("About This App"),
+        includeMarkdown("inst/app/www/about.md")
+      )
     )
   )
 }

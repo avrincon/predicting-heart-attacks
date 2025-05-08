@@ -4,16 +4,6 @@
 #' in the heart attack risk dataset.
 #'
 #' @param id,input,output,session Internal parameters for {shiny}.
-#'
-#' @importFrom shiny NS tagList
-#' @importFrom ggplot2 ggplot aes geom_histogram geom_density theme_minimal
-#' @importFrom dplyr group_by summarise n
-#' @importFrom tidyr pivot_longer
-#' @importFrom bslib card card_header
-#' @importFrom stats median sd quantile
-#'
-#' @return A Shiny module for data exploration
-
 # UI Function
 dataExplorerInput <- function(id) {
   ns <- NS(id)
