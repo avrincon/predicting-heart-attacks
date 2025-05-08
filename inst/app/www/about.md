@@ -1,6 +1,6 @@
 ## Heart Attack Risk Prediction Model
 
-This application uses a lasso logistic regression model to predict the risk of heart attack based on patient data. 
+This application uses a logistic regression model to predict the risk of heart attack based on patient data. 
 
 You can find the code for the model and application on [GitHub](https://github.com/avrincon/predicting-heart-attacks).
 

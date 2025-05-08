@@ -15,7 +15,7 @@ modelPredictionInput <- function(id) {
       numericInput(
         ns("troponin"),
         "Troponin (ng/mL)",
-        value = 0.01,
+        value = 0.0145,
         min = 0.001,
         max = 10,
         step = 0.001
@@ -25,7 +25,7 @@ modelPredictionInput <- function(id) {
         "Creatine kinase-MB (ng/mL)",
         min = 0.3,
         max = 300,
-        value = 1,
+        value = 2,
         step = 0.1
       ),
       materialSwitch(
