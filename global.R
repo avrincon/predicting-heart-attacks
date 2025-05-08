@@ -3,8 +3,10 @@ library(bslib)
 library(bsicons)
 library(shinyFeedback)
 library(shinyWidgets)
+library(htmltools)
 library(dplyr)
 library(tidyr)
+library(stringr)
 library(ggplot2)
 
 # for loading support functions during development

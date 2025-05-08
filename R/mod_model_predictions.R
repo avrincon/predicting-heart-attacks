@@ -33,11 +33,11 @@ modelPredictionInput <- function(id) {
         label = "Show Data", 
         value = TRUE,
         status = "success"
-      ),
-      actionButton(
-        ns("about_btn"), 
-        "About"
-      )
+      )#,
+      # actionButton(
+      #   ns("about_btn"), 
+      #   "About"
+      # )
     )
   )
 }
@@ -52,7 +52,6 @@ modelPredictionOutput <- function(id) {
       max_height = "100px"
     ),
     card(
-      # card_header("Key Biomarkers"),
       navset_card_tab(
         nav_panel(
           "Troponin & CK-MB Effect",
@@ -156,23 +155,23 @@ modelPredictionServer <- function(id) {
       )
     })
     
-    observeEvent(input$about_btn, {
-      showModal(modalDialog(
-        title = "About this App",
-        tagList(
-          "This app predicts the risk of a heart attack based on patient 
-          information. It is intended as a proof-of-concept educational tool and 
-          should not be used for medical diagnosis or treatment decisions.
-          The model uses logistic regression and is trained on the ",
-          a("Heart Attack Risk Assessment Dataset", 
-            href = "https://www.kaggle.com/datasets/fajobgiua/heart-attack-risk-assessment-dataset/data", 
-            target = "_blank"),
-          " from Kaggle."
-        ),
-        easyClose = TRUE,
-        footer = NULL
-      ))
-    })
+    # observeEvent(input$about_btn, {
+    #   showModal(modalDialog(
+    #     title = "About this App",
+    #     tagList(
+    #       "This app predicts the risk of a heart attack based on patient 
+    #       information. It is intended as a proof-of-concept educational tool and 
+    #       should not be used for medical diagnosis or treatment decisions.
+    #       The model uses logistic regression and is trained on the ",
+    #       a("Heart Attack Risk Assessment Dataset", 
+    #         href = "https://www.kaggle.com/datasets/fajobgiua/heart-attack-risk-assessment-dataset/data", 
+    #         target = "_blank"),
+    #       " from Kaggle."
+    #     ),
+    #     easyClose = TRUE,
+    #     footer = NULL
+    #   ))
+    # })
     
   })
 }
