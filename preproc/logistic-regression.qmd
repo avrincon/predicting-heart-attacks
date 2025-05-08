@@ -401,8 +401,44 @@ tidy(reduced_model) |>
 # augment(logistic_model) |> View()
 ```
 
+```{r}
+# plot variable importance
+p_vip <- 
+  vip::vip(
+    logistic_model,
+    aesthetics = list(
+      fill = "#2E9093"
+    )
+  ) +
+  labs(title = "Variable Importance") +
+  theme_minimal() +
+  theme(text = element_text(size = 14))
+
+# ggsave(
+#   "figures/vip.png",
+#   p_vip,
+#   width = 7,
+#   height = 5,
+#   dpi = 500,
+#   bg = "white"
+# )
+```
+
 
 ```{r}
+# order by variable importance
+term_order <- c(
+  "Intercept",
+  "Log Troponin",
+  "Log CK-MB",
+  "Age",
+  "Gender (Male)",
+  "Blood Sugar",
+  "Heart Rate",
+  "Diastolic BP",
+  "Systolic BP"
+)
+
 # format table for presentation
 mod_summary2 <- 
   mod_summary |>
@@ -421,6 +457,8 @@ mod_summary2 <-
         . == "log_troponin" ~ "Log Troponin"
       )
     ),
+    # Convert term to a factor with levels in desired order
+    term = factor(term, levels = term_order),
     across(
       p.value,
       ~ifelse(
@@ -430,24 +468,28 @@ mod_summary2 <-
     ),
     across(where(is.numeric), ~round(., 2))
   ) |> 
-  relocate(p.value, .after = conf.high)
+  # Arrange by the factor to get desired order
+  arrange(term) |> 
+  relocate(p.value, .after = conf.high) |> 
+  rename(
+    "Variable" = term,
+    "Estimate" = estimate,
+    "Std. Error" = std.error,
+    "z value" = statistic,
+    "Lower CI" = conf.low,
+    "Upper CI" = conf.high,
+    "p-value" = p.value
+  )
+
 
 (ft_mod_summary <- 
   flextable(mod_summary2) |> 
   autofit() |> 
-  set_header_labels(
-    term = "Variable",
-    estimate = "Estimate",
-    std.error = "Std. Error",
-    statistic = "z value",
-    conf.low = "Lower CI",
-    conf.high = "Upper CI",
-    p.value = "p-value"
-  ) |> 
     bg(bg = "white", part = "all")
 )
 
 # save_as_image(ft_mod_summary, path = "figures/model_summary.png")
+# save_as_pptx(ft_mod_summary, path = "figures/model_summary.pptx")
 ```
 
 ## Check model performance
@@ -595,7 +637,7 @@ ckmb_grid <- exp(
 ```
 
 
-troponin
+Predict heart attack risk by troponin
 
 ```{r}
 pred_data <- 
@@ -647,7 +689,7 @@ pred_data |>
   theme_minimal() 
 ```
 
-CK MB
+Predict heart attack risk by CK-MB
 
 ```{r}
 pred_ck_mb <- 
@@ -688,7 +730,7 @@ pred_ck_mb |>
 ```
 
 
-Age
+Predict heart attack risk by Age
 
 ```{r}
 pred_age <- 
@@ -727,6 +769,7 @@ pred_age |>
   theme_minimal()
 ```
 
+Predict heart attack risk kointly by troponin and CK-MB
 
 ```{r}
 # Create grid for 2D predictions
@@ -740,8 +783,6 @@ log_ckmb_seq <- seq(
   max(d_clean$log_ck_mb), 
   length.out = 100
 )
-
-
 
 log_troponin_ckmb_grid <- expand_grid(
   log_troponin = log_troponin_seq,
@@ -761,8 +802,6 @@ prediction_grid <-
   )
 
 # Generate predictions
-# grid_preds <- predict(lasso_fit, prediction_grid, type = "prob")
-# grid_preds_resp <- predict(lasso_fit, prediction_grid)
 grid_preds <- 
   predict(logistic_model, 
           # newdata = log_troponin_ckmb_grid, 
@@ -862,9 +901,8 @@ prediction_grid <-
       legend.title = element_text(face = "bold")
     )
 )
-# Print the plot
-print(contour_plot)
 
+print(contour_plot)
 ```
 
 
@@ -879,6 +917,10 @@ saveRDS(d_clean, file = "model/model_data.rds")
 saveRDS(log_troponin_seq, file = "model/log_troponin_seq.rds")
 saveRDS(log_ckmb_seq, file = "model/log_ckmb_seq.rds")
 saveRDS(prediction_grid, file = "model/prediction_grid.rds")
+
+saveRDS(mod_summary2, "model/mod_summary_table.rds")
+saveRDS(p_cm, "model/confusion_matrix_plot.rds")
+saveRDS(p_roc, "model/roc_curve_plot.rds")
 ```
 
 

@@ -110,7 +110,7 @@ plot_contour <- function(prediction_grid,
     labs(
       title = "Heart Attack Probability by Troponin and CK-MB Levels",
       subtitle = "White line shows decision boundary (50% probability)",
-      caption = "Other variable were at their mean values."
+      caption = "Other variables were at their mean or reference values."
     ) +
     theme_minimal() +
     theme(
