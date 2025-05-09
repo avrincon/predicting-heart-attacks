@@ -11,7 +11,6 @@ Fit logistic regression model to predict whether a patient will have a heart att
 library(car)        
 library(performance) 
 library(MASS)      
-library(pROC)      
 library(tidyverse) 
 library(caret) 
 library(broom)
@@ -117,7 +116,7 @@ d_raw |>
 # )
 ```
 
-- Exclude three observations for `heart_rate` with extreme anomalous results that are likely measurement erros
+- Exclude three observations for `heart_rate` with extreme anomalous results that are likely measurement errors
 - Apply log transformation to `troponin` and `ck_mb` since they are both highly skewed
 
 
@@ -285,12 +284,6 @@ logistic_model <-
     data = d_clean
   )
 
-reduced_model <- 
-  glm(
-    result ~ log_ck_mb + log_troponin,
-    family = binomial(link = "logit"),
-    data = d_clean
-  )
 
 null_mod <-
   glm(
@@ -303,32 +296,9 @@ null_mod <-
 
 ```{r}
 anova(null_mod, logistic_model, test = "Chisq")
-anova(logistic_model, reduced_model, test = "Chisq")
 ```
 
 Full model is significantly better than null model containing only an intercept, indicating that the combination of predictors in the full model are collectively significant in predicting the risk of heart attacks.
-
-The reduced model, including only CK-MB and troponin is not significantly different from the full logistic model. Could consider using either model in the final analysis but will use the full model in this case.
-
-```{r}
-fit_summary <- 
-  bind_rows(
-    glance(logistic_model),
-    glance(reduced_model)
-  ) |> 
-  mutate(
-    Model = c("Full Model", "Reduced Model"), 
-    .before = 1
-  ) |> 
-  mutate(across(where(is.numeric), round)) |> 
-  select(Model, AIC, BIC)
-
-fit_summary |> 
-  flextable() |> 
-  autofit()
-```
-
-Information criteria (AIC and BIC) suggest that the reduced model is slightly preferred to the full model.
 
 
 ## Model diagnostics
@@ -337,7 +307,6 @@ Calculate VIF to check for multicollinearity
 
 ```{r}
 car::vif(logistic_model)
-car::vif(reduced_model)
 # => Looks good
 ```
 
@@ -345,18 +314,11 @@ Check for influential points
 
 ```{r}
 influencePlot(logistic_model)
-influencePlot(reduced_model)
 
 cooksd <- cooks.distance(logistic_model)
 plot(cooksd, pch = 20, main = "Cook's Distance")
 abline(h = 4/nrow(d_clean), col = "red")  # Rule of thumb threshold
-
-tibble(cooksd = round(cooksd, 4)) |> 
-  arrange(desc(cooksd))
 ```
-
-There are influential points in both the full and reduced models but all Cook's D <1.0. The full model has fewer and less influential points than the reduced model, suggesting that the full model is more stable. Influential points may be biologically valid in this case and so it is unclear whether they should be removed. Decided to keep them in the model since the model was still able to converge.
-
 
 ```{r}
 # d_clean |>
@@ -376,12 +338,7 @@ pchisq(logistic_model$deviance, logistic_model$df.residual, lower.tail = FALSE)
 
 ```{r}
 summary(logistic_model)
-summary(reduced_model)
-```
-
-```{r}
 round(confint(logistic_model), 3)
-round(confint(reduced_model), 3)
 ```
 
 Although not quite statistically significant, age has an apparent, perhaps un-intuitive, negative relationship with heart attack risk. However, biomarkers like troponin and CK-MB are the true drivers of heart attack risk. Older people tend to have higher levels of these biomarkers, which creates an apparent relationship between age and heart attacks. When we control for the biomarker levels directly, we find that for people with the same biomarker levels, younger people might actually have a slightly higher risk (hence the negative coefficient). 
@@ -396,8 +353,6 @@ mod_summary <-
   mutate(across(where(is.numeric), ~round(., 3)))
 mod_summary
 
-tidy(reduced_model) |> 
-  mutate(across(where(is.numeric), ~round(., 3)))
 # augment(logistic_model) |> View()
 ```
 
@@ -413,7 +368,7 @@ p_vip <-
   labs(title = "Variable Importance") +
   theme_minimal() +
   theme(text = element_text(size = 14))
-
+p_vip
 # ggsave(
 #   "figures/vip.png",
 #   p_vip,
@@ -520,7 +475,6 @@ cat("Cohen's Kappa:", round(kappa, 4), "\n")
 checking the McFadden's pseudo R^2 based on the deviance
 ```{r}
 1 - logistic_model$deviance/logistic_model$null.deviance
-1 - reduced_model$deviance/reduced_model$null.deviance
 ```
 
 
@@ -569,8 +523,6 @@ predictions <-
   truth = d_clean$result,
   prob = predict(logistic_model, type = "response")  # Predicted probabilities
 )
-# xx <- augment(logistic_model, type.predict = "response") 
-# xx |> select(result, .fitted)
 
 roc_data <- 
   predictions %>%
@@ -626,13 +578,6 @@ log_ckmb_seq <- seq(
   min(d_clean$log_ck_mb), 
   max(d_clean$log_ck_mb), 
   length.out = 100
-)
-
-troponin_grid <- exp(
-  seq(log(0.001), log(max(d_clean$troponin)), length.out = 100)
-)
-ckmb_grid <- exp(
-  seq(log(0.3), log(max(d_clean$ck_mb)), length.out = 100)
 )
 ```
 
@@ -769,21 +714,10 @@ pred_age |>
   theme_minimal()
 ```
 
-Predict heart attack risk kointly by troponin and CK-MB
+Predict heart attack risk jointly by troponin and CK-MB
 
 ```{r}
 # Create grid for 2D predictions
-log_troponin_seq <- seq(
-  min(d_clean$log_troponin), 
-  max(d_clean$log_troponin), 
-  length.out = 100
-)
-log_ckmb_seq <- seq(
-  min(d_clean$log_ck_mb), 
-  max(d_clean$log_ck_mb), 
-  length.out = 100
-)
-
 log_troponin_ckmb_grid <- expand_grid(
   log_troponin = log_troponin_seq,
   log_ck_mb = log_ckmb_seq
@@ -901,8 +835,6 @@ prediction_grid <-
       legend.title = element_text(face = "bold")
     )
 )
-
-print(contour_plot)
 ```
 
 
@@ -912,7 +844,6 @@ Save data to be used in Shiny app.
 
 ```{r}
 saveRDS(logistic_model, file = "model/logistic_model.rds")
-saveRDS(reduced_model, file = "model/reduced_model.rds")
 saveRDS(d_clean, file = "model/model_data.rds")
 saveRDS(log_troponin_seq, file = "model/log_troponin_seq.rds")
 saveRDS(log_ckmb_seq, file = "model/log_ckmb_seq.rds")

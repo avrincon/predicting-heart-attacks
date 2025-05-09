@@ -4,7 +4,6 @@
 #' in the heart attack risk dataset.
 #'
 #' @param id,input,output,session Internal parameters for {shiny}.
-# UI Function
 dataExplorerInput <- function(id) {
   ns <- NS(id)
   tagList(
@@ -57,7 +56,6 @@ dataExplorerInput <- function(id) {
   )
 }
 
-# Output Function
 dataExplorerOutput <- function(id) {
   ns <- NS(id)
   tagList(
@@ -72,7 +70,6 @@ dataExplorerOutput <- function(id) {
   )
 }
 
-# Server Function
 dataExplorerServer <- function(id, data) {
   moduleServer(id, function(input, output, session) {
     
